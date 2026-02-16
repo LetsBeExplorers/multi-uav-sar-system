@@ -2,11 +2,9 @@
 
 ## Overview
 
-This project explores a cooperative multi-UAV search and rescue (SAR) system developed for UCCS DASE 4460 / CS 3460 (Spring 2026).
+This project explores a cooperative multi-UAV search and rescue (SAR) system combining decentralized coordination, onboard human detection, and disturbance-aware navigation.
 
-The system combines decentralized coordination, onboard human detection, and disturbance-aware navigation. Development is performed in simulation and deployed on real DJI Tello EDU drones.
-
-The goal is to study how coordination, perception, and environmental disturbances interact in both simulated and real-world constrained UAV environments.
+Development is performed in simulation and deployed on real DJI Tello EDU drones. The goal is to study how coordination, perception, and environmental disturbances interact in constrained UAV environments.
 
 ## System Environments
 
@@ -27,3 +25,7 @@ Early development. Simulation and hardware integration in progress.
 ## License
 
 MIT License
+
+## Academic Context
+
+Originally developed as part of an undergraduate robotics systems course at UCCS (Spring 2026).
