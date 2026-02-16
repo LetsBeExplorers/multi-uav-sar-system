@@ -28,4 +28,4 @@ MIT License
 
 ## Academic Context
 
-Originally developed as part of an undergraduate robotics systems course at UCCS (Spring 2026).
+Developed as part of an undergraduate robotics systems course at UCCS (Spring 2026).
