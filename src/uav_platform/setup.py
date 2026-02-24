@@ -15,8 +15,8 @@ setup(
     zip_safe=True,
     maintainer='raytracer',
     maintainer_email='ray3618@gmail.com',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    description='Platform abstraction layer for UAV hardware and simulation.',
+    license='MIT',
     extras_require={
         'test': [
             'pytest',
