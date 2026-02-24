@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'sim_platform = uav_platform.sim_platform:main',
         ],
     },
 )
