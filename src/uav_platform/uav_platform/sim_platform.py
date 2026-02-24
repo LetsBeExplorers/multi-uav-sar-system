@@ -13,14 +13,15 @@ class SimulatedUAV(Node):
 
 
 def main(args=None):
-    # Start ROS
+    # Initialize ROS 2
     rclpy.init(args=args)
 
-    # Create node
+    # Create the node
     node = SimulatedUAV()
 
-    # Keep it running
-    rclpy.spin(node)
-
-    # Clean shutdown
-    rclpy.shutdown()
+    try:
+        # Keep the node alive and processing callbacks
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        # Allow clean exit on Ctrl+C
+        pass
