@@ -217,3 +217,8 @@ __marimo__/
 *.fls
 *.fdb_latexmk
 *.synctex.gz
+
+# ROS 2 workspace
+build/
+install/
+log/
