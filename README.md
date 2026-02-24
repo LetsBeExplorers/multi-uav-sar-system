@@ -1,31 +1,56 @@
 # Drone Network for Search and Rescue (SAR) System
 
-## Overview
+A ROS 2–based multi-UAV Search and Rescue (SAR) system designed for structured indoor environments under realistic communication and computational constraints.
 
-This project explores a cooperative multi-UAV search and rescue (SAR) system combining decentralized coordination, onboard human detection, and disturbance-aware navigation.
+The system integrates decentralized coordination, real-time human detection, and obstacle-aware navigation into a unified architecture validated in simulation and on DJI Tello EDU drones.
 
-Development is performed in simulation and deployed on real DJI Tello EDU drones. The goal is to study how coordination, perception, and environmental disturbances interact in constrained UAV environments.
+## Key Features
 
-## System Environments
+- Deterministic region-based decentralized coordination (no central task allocator)
+- Finite State Machine (`SEARCHING`, `ASSISTING`, `VERIFYING`, `IDLE`)
+- YOLO-based real-time human detection
+- 2D occupancy grid mapping
+- A*-based obstacle-aware path planning
+- Detection-triggered state transitions
+- Sim-to-real validation (Gazebo → Tello EDU)
 
-- Multi-agent simulation in Python  
-- Real-world deployment using DJI Tello EDU drones  
+## Architecture Overview
+
+Each UAV runs three logical modules:
+
+1. **Coordination**  
+   Region partitioning and workload redistribution.
+
+2. **Detection**  
+   Lightweight YOLO-based human detection with multi-frame validation.
+
+3. **Navigation**  
+   Incremental occupancy grid updates with A* planning and dynamic obstacle handling.
+
+High-level computation runs on a Ground Control Station, while decision logic remains decentralized through ROS 2 topic exchange.
+
+## Evaluation Metrics
+
+- Coverage efficiency
+- Time-to-detection
+- Coverage overlap
+- Collision-free mission completion
+- Replanning latency
+- Sim-to-real consistency
 
 ## Technologies
 
-- Python  
-- Multi-agent coordination  
-- Computer vision  
-- DJI Tello EDU SDK  
+- ROS 2 Humble
+- Gazebo
+- Python
+- YOLO (single-stage detection)
+- A* path planning
+- DJI Tello EDU SDK
 
-## Status
+## Academic Context
 
-Early development. Simulation and hardware integration in progress.
+Developed as part of DASE 4460 / CS 3460 (Spring 2026).
 
 ## License
 
 MIT License
-
-## Academic Context
-
-Developed as part of an undergraduate robotics systems course at UCCS (Spring 2026).
