@@ -14,5 +14,10 @@ echo "Sourcing ROS..."
 source /opt/ros/jazzy/setup.bash
 
 echo "Launching Gazebo simulation..."
+gz sim sim/worlds/quadcopter.sdf &
 
-gz sim ../sim/worlds/quadcopter.sdf
+sleep 3
+
+echo "Starting ROS-Gazebo bridge..."
+ros2 run ros_gz_bridge parameter_bridge \
+/model/x3/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist &
