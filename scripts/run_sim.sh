@@ -15,5 +15,4 @@ source /opt/ros/jazzy/setup.bash
 
 echo "Launching Gazebo simulation..."
 
-# Replace with UAV world later
-gz sim
+gz sim ../sim/worlds/quadcopter.sdf
