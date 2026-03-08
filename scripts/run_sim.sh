@@ -1,8 +1,13 @@
 #!/bin/bash
-
 set -e
 
+echo "Sourcing ROS 2..."
 source /opt/ros/jazzy/setup.bash
-source install/setup.bash
 
-ros2 run uav_platform sim_platform
+echo "Cleaning old build..."
+rm -rf build install log
+
+echo "Building UAV workspace..."
+colcon build --symlink-install
+
+echo "Build complete."
