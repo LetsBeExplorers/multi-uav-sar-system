@@ -33,11 +33,16 @@ pkill -f cyclonedds 2>/dev/null
 
 sleep 1
 
-echo "Sourcing ROS..."
+echo "Sourcing ROS 2..."
 source /opt/ros/jazzy/setup.bash
+
+echo "Building workspace..."
+colcon build --symlink-install
+
+echo "Sourcing workspace..."
 source install/setup.bash
 
-sleep 2
+sleep 4
 
 echo "Launching UAV nodes..."
 

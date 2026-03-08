@@ -1,13 +1,19 @@
 #!/bin/bash
 set -e
 
-echo "Sourcing ROS 2..."
+echo "Cleaning old simulator processes..."
+
+pkill -9 -f "gz sim" 2>/dev/null || true
+pkill -9 -f gazebo 2>/dev/null || true
+pkill -9 -f ros_gz_bridge 2>/dev/null || true
+pkill -9 -f robot_state_publisher 2>/dev/null || true
+
+sleep 1
+
+echo "Sourcing ROS..."
 source /opt/ros/jazzy/setup.bash
 
-echo "Cleaning old build..."
-rm -rf build install log
+echo "Launching Gazebo simulation..."
 
-echo "Building UAV workspace..."
-colcon build --symlink-install
-
-echo "Build complete."
+# Replace with UAV world later
+gz sim
