@@ -1,10 +1,13 @@
 #!/bin/bash
 
+# Move to workspace root (parent of scripts)
+cd "$(dirname "$0")/.."
+
 stop_uavs() {
     echo "Stopping UAV system..."
 
     # Stop UAV nodes
-    pkill -f sim_platform
+    pkill -f gazebo_driver
     pkill -f swarm_coordination
     pkill -f mission_manager
     pkill -f navigation
@@ -23,7 +26,7 @@ trap stop_uavs SIGINT
 
 echo "Cleaning old UAV processes..."
 
-pkill -f sim_platform 2>/dev/null
+pkill -f gazebo_driver 2>/dev/null
 pkill -f swarm_coordination 2>/dev/null
 pkill -f mission_manager 2>/dev/null
 pkill -f navigation 2>/dev/null
@@ -47,7 +50,7 @@ sleep 4
 echo "Launching UAV nodes..."
 
 # Platform layer
-ros2 run uav_platform sim_platform &
+ros2 run uav_platform gazebo_driver &
 
 # Swarm brain (when ready)
 # ros2 run swarm_coordination swarm_node &
