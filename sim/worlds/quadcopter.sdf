@@ -139,6 +139,14 @@
         <rotorVelocitySlowdownSim>10</rotorVelocitySlowdownSim>
         <motorType>velocity</motorType>
       </plugin>
+
+      <plugin
+          filename="gz-sim-multicopter-control-system"
+          name="gz::sim::systems::MulticopterVelocityControl">
+          <robotNamespace>X3</robotNamespace>
+          <commandSubTopic>cmd_vel</commandSubTopic>
+      </plugin>
+      
     </include>
   </world>
 </sdf>
