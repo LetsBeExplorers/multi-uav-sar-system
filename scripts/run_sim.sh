@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Move to workspace root (parent of scripts)
+cd "$(dirname "$0")/.."
+
 echo "Cleaning old simulator processes..."
 
 pkill -9 -f "gz sim" 2>/dev/null || true
@@ -20,4 +23,4 @@ sleep 3
 
 echo "Starting ROS-Gazebo bridge..."
 ros2 run ros_gz_bridge parameter_bridge \
-/model/x3/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist &
+/model/x3/cmd_vel@geometry_msgs/msg/Twist[gz.msgs.Twist &
