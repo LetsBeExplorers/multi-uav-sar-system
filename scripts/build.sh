@@ -66,10 +66,18 @@ sleep 3
 
 echo "Testing platform control..."
 
-# Send command INTO platform layer
-ros2 topic pub -1 /x1/platform/cmd_vel geometry_msgs/Twist "{linear: {z: 1.0}}"
-sleep 2
-ros2 topic pub -1 /x1/platform/cmd_vel geometry_msgs/Twist "{linear: {z: 0.0}}"
+# Takeoff (continuous upward command)
+ros2 topic pub -r 10 /x1/platform/cmd_vel geometry_msgs/Twist "{linear: {z: 1.0}}" &
+PUB_PID=$!
+sleep 3
+kill $PUB_PID
 
-echo "UAV platform running. Press Ctrl+C to stop."
+sleep 1
+
+# Landing (continuous downward command)
+ros2 topic pub -r 10 /x1/platform/cmd_vel geometry_msgs/Twist "{linear: {z: -1.0}}" &
+PUB_PID=$!
+sleep 3
+kill $PUB_PID
+
 wait
