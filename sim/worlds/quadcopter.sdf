@@ -57,6 +57,8 @@
       <!-- Quadcopter -->
       <include>
         <uri>file:///home/raytracer/.gz/fuel/fuel.gazebosim.org/openrobotics/models/x3 uav/4</uri>
+
+        <name>x1</name>
         <pose>0 0 0.5 0 0 0</pose>
 
         <!-- Kinematic velocity control plugin -->

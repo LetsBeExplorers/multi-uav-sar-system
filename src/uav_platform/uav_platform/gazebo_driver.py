@@ -62,7 +62,6 @@ class GazeboDriver(Node):
         # Publish safe command to simulator
         self.pub.publish(safe_msg)
 
-
 def main(args=None):
     rclpy.init(args=args)
     node = GazeboDriver()
