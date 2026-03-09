@@ -47,10 +47,18 @@ source install/setup.bash
 
 sleep 4
 
-echo "Launching UAV nodes..."
+echo "Launching UAV platform drivers..."
+ros2 run uav_platform gazebo_driver --ros-args -p uav_name:=x3 &
 
-# Platform layer
-ros2 run uav_platform gazebo_driver &
+sleep 3
+
+echo "Testing abstraction with sample commands..."
+# Rise
+ros2 topic pub -1 /x3/cmd_vel geometry_msgs/Twist "{linear: {z: 1.0}}"
+sleep 2
+
+# Stop
+ros2 topic pub -1 /x3/cmd_vel geometry_msgs/Twist "{linear: {z: 0.0}}"
 
 # Swarm brain (when ready)
 # ros2 run swarm_coordination swarm_node &
