@@ -8,14 +8,24 @@ class PlatformInterface(Node):
     def __init__(self):
         super().__init__('platform_interface')
 
-        # Parameters
-        self.declare_parameter('uav_name', 'x1')
-        self.declare_parameter('max_linear_speed', 3.0)
-        self.declare_parameter('max_vertical_speed', 2.0)
+        # ===== Parameters =====
+        self.declare_parameters(
+            namespace='',
+            parameters=[
+                ('uav_name', 'x1'),
+                ('max_linear_speed', 3.0),
+                ('max_vertical_speed', 2.0),
+                ('takeoff_altitude_threshold', 0.3),
+                ('landing_altitude_threshold', 0.1),
+            ]
+        )
 
+        # Retrieve parameters
         uav_name = self.get_parameter('uav_name').value
         self.max_linear = self.get_parameter('max_linear_speed').value
         self.max_vertical = self.get_parameter('max_vertical_speed').value
+        self.takeoff_thresh = self.get_parameter('takeoff_altitude_threshold').value
+        self.landing_thresh = self.get_parameter('landing_altitude_threshold').value
 
         # Topics
         self.cmd_in_topic = f'/{uav_name}/platform/cmd_vel'
