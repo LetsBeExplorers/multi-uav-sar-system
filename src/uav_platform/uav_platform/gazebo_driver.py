@@ -48,7 +48,6 @@ class GazeboDriver(Node):
     def publish_state(self, msg):
         self.state_pub.publish(msg)
 
-
 def main(args=None):
     rclpy.init(args=args)
     node = GazeboDriver()
