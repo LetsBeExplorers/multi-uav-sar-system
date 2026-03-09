@@ -7,6 +7,7 @@ stop_uavs() {
     echo "Stopping UAV system..."
 
     # Stop UAV nodes
+    pkill -f platform_interface
     pkill -f gazebo_driver
     pkill -f swarm_coordination
     pkill -f mission_manager
@@ -15,7 +16,7 @@ stop_uavs() {
     # Kill stuck ROS runners
     pkill -f "ros2 run"
 
-    # Reset DDS (safe)
+    # Reset DDS
     pkill -f fastdds 2>/dev/null
     pkill -f cyclonedds 2>/dev/null
 
@@ -26,11 +27,13 @@ trap stop_uavs SIGINT
 
 echo "Cleaning old UAV processes..."
 
+pkill -f platform_interface 2>/dev/null
 pkill -f gazebo_driver 2>/dev/null
 pkill -f swarm_coordination 2>/dev/null
 pkill -f mission_manager 2>/dev/null
 pkill -f navigation 2>/dev/null
 
+pkill -f "ros2 run" 2>/dev/null
 pkill -f fastdds 2>/dev/null
 pkill -f cyclonedds 2>/dev/null
 
@@ -45,30 +48,28 @@ colcon build --symlink-install
 echo "Sourcing workspace..."
 source install/setup.bash
 
-sleep 4
+sleep 2
 
-echo "Launching UAV platform drivers..."
-ros2 run uav_platform gazebo_driver --ros-args -p uav_name:=x3 &
+echo "Launching UAV platform..."
+
+# Platform Interface (safety + vehicle logic)
+ros2 run uav_platform platform_interface \
+  --ros-args --params-file src/uav_platform/config/platform.yaml \
+  -p uav_name:=x1 &
+
+# Gazebo Driver (simulator adapter)
+ros2 run uav_platform gazebo_driver \
+  --ros-args --params-file src/uav_platform/config/platform.yaml \
+  -p uav_name:=x1 &
 
 sleep 3
 
-echo "Testing abstraction with sample commands..."
-# Rise
-ros2 topic pub -1 /x3/cmd_vel geometry_msgs/Twist "{linear: {z: 1.0}}"
+echo "Testing platform control..."
+
+# Send command INTO platform layer
+ros2 topic pub -1 /x1/platform/cmd_vel geometry_msgs/Twist "{linear: {z: 1.0}}"
 sleep 2
+ros2 topic pub -1 /x1/platform/cmd_vel geometry_msgs/Twist "{linear: {z: 0.0}}"
 
-# Stop
-ros2 topic pub -1 /x3/cmd_vel geometry_msgs/Twist "{linear: {z: 0.0}}"
-
-# Swarm brain (when ready)
-# ros2 run swarm_coordination swarm_node &
-
-# Mission manager (when ready)
-# ros2 run mission_manager mission_node &
-
-# Navigation stack (future)
-# ros2 run navigation nav_node &
-
-echo "UAV simulation running. Press Ctrl+C to stop."
-
+echo "UAV platform running. Press Ctrl+C to stop."
 wait
