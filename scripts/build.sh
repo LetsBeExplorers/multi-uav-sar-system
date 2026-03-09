@@ -54,12 +54,12 @@ echo "Launching UAV platform..."
 
 # Platform Interface (safety + vehicle logic)
 ros2 run uav_platform platform_interface \
-  --ros-args --params-file src/uav_platform/config/platform.yaml \
+  --ros-args --params-file "$(pwd)/src/uav_platform/config/platform.yaml" \
   -p uav_name:=x1 &
 
 # Gazebo Driver (simulator adapter)
 ros2 run uav_platform gazebo_driver \
-  --ros-args --params-file src/uav_platform/config/platform.yaml \
+  --ros-args --params-file "$(pwd)/src/uav_platform/config/platform.yaml" \
   -p uav_name:=x1 &
 
 sleep 3

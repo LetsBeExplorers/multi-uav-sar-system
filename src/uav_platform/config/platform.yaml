@@ -6,5 +6,4 @@ platform_interface:
     landing_altitude_threshold: 0.1
 
 gazebo_driver:
-  ros__parameters:
-    # shared driver params later
+  ros__parameters: {}
