@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'gazebo_driver = uav_platform.gazebo_driver:main',
+            'platform_interface = uav_platform.platform_interface:main',
         ],
     },
 )
