@@ -1,66 +1,53 @@
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry
 
 class GazeboDriver(Node):
 
     def __init__(self):
         super().__init__('gazebo_driver')
 
-        # ===== Parameters =====
-        self.declare_parameter('uav_name', 'x3')
-        self.declare_parameter('max_linear_speed', 3.0)
-        self.declare_parameter('max_vertical_speed', 2.0)
-
+        # Parameters
+        self.declare_parameter('uav_name', 'x1')
         uav_name = self.get_parameter('uav_name').value
-        self.max_linear = self.get_parameter('max_linear_speed').value
-        self.max_vertical = self.get_parameter('max_vertical_speed').value
 
-        self.cmd_topic = f'/model/{uav_name}/cmd_vel'
-        self.input_topic = f'/{uav_name}/cmd_vel'
+        # Topics
+        self.cmd_in_topic = f'/{uav_name}/driver/cmd_vel'
+        self.gz_cmd_topic = f'/model/{uav_name}/cmd_vel'
+        self.gz_odom_topic = f'/model/{uav_name}/odometry'
+        self.state_topic = f'/{uav_name}/state/odom'
 
-        # ===== Publisher to Gazebo =====
-        self.pub = self.create_publisher(Twist, self.cmd_topic, 10)
+        # Publisher to Gazebo
+        self.cmd_pub = self.create_publisher(Twist, self.gz_cmd_topic, 10)
 
-        # ===== Subscriber from Navigation Layer =====
-        self.sub = self.create_subscription(
+        # Subscriber from Platform Interface
+        self.cmd_sub = self.create_subscription(
             Twist,
-            self.input_topic,
-            self.cmd_callback,
+            self.cmd_in_topic,
+            self.forward_command,
             10
         )
 
-        # ===== Flight State =====
-        self.flight_state = "GROUNDED"   # GROUNDED | AIRBORNE
+        # State publisher to Platform
+        self.state_pub = self.create_publisher(Odometry, self.state_topic, 10)
+
+        # Subscribe to Gazebo odometry
+        self.odom_sub = self.create_subscription(
+            Odometry,
+            self.gz_odom_topic,
+            self.publish_state,
+            10
+        )
 
         self.get_logger().info(f"GazeboDriver ready for UAV: {uav_name}")
 
-    # ===== Velocity Command Callback =====
-    def cmd_callback(self, msg: Twist):
+    def forward_command(self, msg):
+        self.cmd_pub.publish(msg)
 
-        safe_msg = Twist()
+    def publish_state(self, msg):
+        self.state_pub.publish(msg)
 
-        # --- Safety Clamping ---
-        safe_msg.linear.x = max(min(msg.linear.x, self.max_linear), -self.max_linear)
-        safe_msg.linear.y = max(min(msg.linear.y, self.max_linear), -self.max_linear)
-        safe_msg.linear.z = max(min(msg.linear.z, self.max_vertical), -self.max_vertical)
-
-        safe_msg.angular.z = msg.angular.z
-
-        # --- Basic Flight State Logic ---
-        if self.flight_state == "GROUNDED":
-            if safe_msg.linear.z > 0.2:
-                self.flight_state = "AIRBORNE"
-                self.get_logger().info("Takeoff detected → AIRBORNE")
-
-        elif self.flight_state == "AIRBORNE":
-            if abs(safe_msg.linear.z) < 0.05 and \
-               abs(safe_msg.linear.x) < 0.05 and \
-               abs(safe_msg.linear.y) < 0.05:
-                self.get_logger().debug("Hovering")
-
-        # Publish safe command to simulator
-        self.pub.publish(safe_msg)
 
 def main(args=None):
     rclpy.init(args=args)
