@@ -2,6 +2,7 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 
+# Safety & Interface Layer between Autonomy and Hardware
 class PlatformInterface(Node):
 
     def __init__(self):
