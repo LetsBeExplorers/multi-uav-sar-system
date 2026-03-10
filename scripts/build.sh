@@ -73,7 +73,7 @@ sleep 3
 
 echo "Sending test waypoints..."
 
-ros2 topic pub /$UAV_NAME/nav/waypoints geometry_msgs/PoseArray "
+ros2 topic pub --once /$UAV_NAME/nav/waypoints geometry_msgs/PoseArray "
 poses:
 - position: {x: 3.0, y: 0.0, z: 0.0}
 - position: {x: 3.0, y: 3.0, z: 0.0}
