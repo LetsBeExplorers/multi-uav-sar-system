@@ -62,6 +62,12 @@ ros2 run uav_platform gazebo_driver \
   --ros-args --params-file "$(pwd)/src/uav_platform/config/platform.yaml" \
   -p uav_name:=x1 &
 
+sleep 2
+
+# Path Executor (Temporary Navigation Layer)
+ros2 run navigation path_executor \
+  --ros-args -p uav_name:=x1 &
+
 sleep 3
 
 echo "Testing platform control..."

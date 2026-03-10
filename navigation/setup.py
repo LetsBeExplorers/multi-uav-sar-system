@@ -24,6 +24,6 @@ setup(
     },
     entry_points={
         'console_scripts': [
-        ],
+            'waypoint_executor = navigation.waypoint_executor:main',        ],
     },
 )
