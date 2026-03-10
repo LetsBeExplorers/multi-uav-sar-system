@@ -42,27 +42,25 @@ class PathExecutor(Node):
 
             self.get_logger().info(f"Moving to waypoint {i+1}: ({x:.1f}, {y:.1f})")
 
-            # Decide movement direction (simple grid logic)
             cmd = Twist()
 
+            # Decide simple direction
             if abs(x) > abs(y):
-                if x > 0:
-                    cmd.linear.x = 1.0   # forward
-                else:
-                    cmd.linear.x = -1.0  # backward
+                cmd.linear.x = 1.0 if x > 0 else -1.0
             else:
-                if y > 0:
-                    cmd.linear.y = 1.0   # left
-                else:
-                    cmd.linear.y = -1.0  # right
+                cmd.linear.y = 1.0 if y > 0 else -1.0
 
-            # Move
+            # --- MOVE ---
             self.cmd_pub.publish(cmd)
-            time.sleep(2.0)
+            time.sleep(3.0)   # move longer
 
-            # Stop
-            self.cmd_pub.publish(Twist())
-            time.sleep(1.0)
+            # --- STRONG STOP ---
+            stop_cmd = Twist()
+            for _ in range(15):     # publish stop repeatedly
+                self.cmd_pub.publish(stop_cmd)
+                time.sleep(0.1)
+
+            time.sleep(1.0)  # pause before next move
 
         self.get_logger().info("Finished all waypoints")
 
