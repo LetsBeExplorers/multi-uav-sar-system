@@ -11,7 +11,7 @@ stop_uavs() {
     pkill -f gazebo_driver
     pkill -f swarm_coordination
     pkill -f mission_manager
-    pkill -f navigation
+    pkill -f path_executor
 
     # Kill stuck ROS runners
     pkill -f "ros2 run"
@@ -31,8 +31,7 @@ pkill -f platform_interface 2>/dev/null
 pkill -f gazebo_driver 2>/dev/null
 pkill -f swarm_coordination 2>/dev/null
 pkill -f mission_manager 2>/dev/null
-pkill -f navigation 2>/dev/null
-
+pkill -f path_executor 2>/dev/null
 pkill -f "ros2 run" 2>/dev/null
 pkill -f fastdds 2>/dev/null
 pkill -f cyclonedds 2>/dev/null
@@ -50,40 +49,36 @@ source install/setup.bash
 
 sleep 2
 
+UAV_NAME=x1
+
 echo "Launching UAV platform..."
 
-# Platform Interface (safety + vehicle logic)
+# Platform Interface
 ros2 run uav_platform platform_interface \
   --ros-args --params-file "$(pwd)/src/uav_platform/config/platform.yaml" \
-  -p uav_name:=x1 &
+  -p uav_name:=$UAV_NAME &
 
-# Gazebo Driver (simulator adapter)
+# Gazebo Driver
 ros2 run uav_platform gazebo_driver \
   --ros-args --params-file "$(pwd)/src/uav_platform/config/platform.yaml" \
-  -p uav_name:=x1 &
+  -p uav_name:=$UAV_NAME &
 
 sleep 2
 
-# Path Executor (Temporary Navigation Layer)
+# Path Executor
 ros2 run navigation path_executor \
-  --ros-args -p uav_name:=x1 &
+  --ros-args -p uav_name:=$UAV_NAME &
 
 sleep 3
 
-echo "Testing platform control..."
+echo "Sending test waypoints..."
 
-# Takeoff (continuous upward command)
-ros2 topic pub -r 10 /x1/platform/cmd_vel geometry_msgs/Twist "{linear: {z: 1.0}}" &
-PUB_PID=$!
-sleep 3
-kill $PUB_PID
-
-sleep 1
-
-# Landing (continuous downward command)
-ros2 topic pub -r 10 /x1/platform/cmd_vel geometry_msgs/Twist "{linear: {z: -1.0}}" &
-PUB_PID=$!
-sleep 3
-kill $PUB_PID
+ros2 topic pub /$UAV_NAME/nav/waypoints geometry_msgs/PoseArray "
+poses:
+- position: {x: 3.0, y: 0.0, z: 0.0}
+- position: {x: 3.0, y: 3.0, z: 0.0}
+- position: {x: 0.0, y: 3.0, z: 0.0}
+- position: {x: 0.0, y: 0.0, z: 0.0}
+"
 
 wait
