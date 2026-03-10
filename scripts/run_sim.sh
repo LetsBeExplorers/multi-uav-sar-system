@@ -17,7 +17,8 @@ echo "Sourcing ROS..."
 source /opt/ros/jazzy/setup.bash
 
 echo "Launching Gazebo simulation..."
-gz sim "$(pwd)/sim/worlds/quadcopter.sdf" &
+WORLD_FILE=${1:-quadcopter.sdf}
+gz sim "$(pwd)/sim/worlds/$WORLD_FILE" &
 
 sleep 3
 
