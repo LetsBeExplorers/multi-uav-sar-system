@@ -49,36 +49,62 @@ source install/setup.bash
 
 sleep 2
 
-UAV_NAME=x1
+############################
+# UAV 1
+############################
+UAV1=x1
 
-echo "Launching UAV platform..."
+echo "Launching UAV $UAV1..."
 
-# Platform Interface
 ros2 run uav_platform platform_interface \
   --ros-args --params-file "$(pwd)/src/uav_platform/config/platform.yaml" \
-  -p uav_name:=$UAV_NAME &
+  -p uav_name:=$UAV1 &
 
-# Gazebo Driver
 ros2 run uav_platform gazebo_driver \
   --ros-args --params-file "$(pwd)/src/uav_platform/config/platform.yaml" \
-  -p uav_name:=$UAV_NAME &
+  -p uav_name:=$UAV1 &
 
-sleep 2
-
-# Path Executor
 ros2 run navigation path_executor \
-  --ros-args -p uav_name:=$UAV_NAME &
+  --ros-args -p uav_name:=$UAV1 &
+
+############################
+# UAV 2
+############################
+UAV2=x2
+
+echo "Launching UAV $UAV2..."
+
+ros2 run uav_platform platform_interface \
+  --ros-args --params-file "$(pwd)/src/uav_platform/config/platform.yaml" \
+  -p uav_name:=$UAV2 &
+
+ros2 run uav_platform gazebo_driver \
+  --ros-args --params-file "$(pwd)/src/uav_platform/config/platform.yaml" \
+  -p uav_name:=$UAV2 &
+
+ros2 run navigation path_executor \
+  --ros-args -p uav_name:=$UAV2 &
 
 sleep 3
 
-echo "Sending test waypoints..."
+echo "Sending test waypoints to both UAVs..."
 
-ros2 topic pub --once /$UAV_NAME/nav/waypoints geometry_msgs/PoseArray "
+# UAV 1 waypoints
+ros2 topic pub --once /x1/nav/waypoints geometry_msgs/PoseArray "
 poses:
-- position: {x: 3.0, y: 0.0, z: 0.0}
-- position: {x: 3.0, y: 3.0, z: 0.0}
-- position: {x: 0.0, y: 3.0, z: 0.0}
-- position: {x: 0.0, y: 0.0, z: 0.0}
-"
+- position: {x: 3.0, y: 0.0, z: 1.0}
+- position: {x: 3.0, y: 3.0, z: 1.0}
+- position: {x: 0.0, y: 3.0, z: 1.0}
+- position: {x: 0.0, y: 0.0, z: 1.0}
+" &
+
+# UAV 2 waypoints (higher altitude)
+ros2 topic pub --once /x2/nav/waypoints geometry_msgs/PoseArray "
+poses:
+- position: {x: 3.0, y: 0.0, z: 2.5}
+- position: {x: 3.0, y: 3.0, z: 2.5}
+- position: {x: 0.0, y: 3.0, z: 2.5}
+- position: {x: 0.0, y: 0.0, z: 2.5}
+" &
 
 wait
