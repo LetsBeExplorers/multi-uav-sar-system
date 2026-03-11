@@ -71,7 +71,7 @@
       <uri>file:///home/raytracer/.gz/fuel/fuel.gazebosim.org/openrobotics/models/x3 uav/4</uri>
 
       <name>x2</name>
-      <pose>2 0 0.5 0 0 0</pose>
+      <pose>0.5 0 0.5 0 0 0</pose>
 
       <plugin filename="gz-sim-velocity-control-system"
               name="gz::sim::systems::VelocityControl"/>
