@@ -58,14 +58,17 @@ echo "Launching UAV $UAV1..."
 
 ros2 run uav_platform platform_interface \
   --ros-args --params-file "$(pwd)/src/uav_platform/config/platform.yaml" \
-  -p uav_name:=$UAV1 &
+  -p uav_name:=$UAV1 \
+  -r __node:=platform_interface_$UAV1 &
 
 ros2 run uav_platform gazebo_driver \
   --ros-args --params-file "$(pwd)/src/uav_platform/config/platform.yaml" \
-  -p uav_name:=$UAV1 &
+  -p uav_name:=$UAV1 \
+  -r __node:=gazebo_driver_$UAV1 &
 
 ros2 run navigation path_executor \
-  --ros-args -p uav_name:=$UAV1 &
+  --ros-args -p uav_name:=$UAV1 \
+  -r __node:=path_executor_$UAV1 &
 
 ############################
 # UAV 2
@@ -76,14 +79,17 @@ echo "Launching UAV $UAV2..."
 
 ros2 run uav_platform platform_interface \
   --ros-args --params-file "$(pwd)/src/uav_platform/config/platform.yaml" \
-  -p uav_name:=$UAV2 &
+  -p uav_name:=$UAV2 \
+  -r __node:=platform_interface_$UAV2 &
 
 ros2 run uav_platform gazebo_driver \
   --ros-args --params-file "$(pwd)/src/uav_platform/config/platform.yaml" \
-  -p uav_name:=$UAV2 &
+  -p uav_name:=$UAV2 \
+  -r __node:=gazebo_driver_$UAV2 &
 
 ros2 run navigation path_executor \
-  --ros-args -p uav_name:=$UAV2 &
+  --ros-args -p uav_name:=$UAV2 \
+  -r __node:=path_executor_$UAV2 &
 
 sleep 3
 
