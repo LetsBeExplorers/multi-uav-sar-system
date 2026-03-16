@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# Minimal Swarm Coordinator for 3 UAVs
 
 import rclpy
 from rclpy.node import Node
@@ -10,20 +9,28 @@ class SwarmCoordinator(Node):
         super().__init__('swarm_coordinator')
 
         # Parameters
-        self.declare_parameter('uav_list', ['x1', 'x2', 'x3'])
-        self.declare_parameter('area_bounds', [-5.0, 5.0, -5.0, 5.0])  # [xmin, xmax, ymin, ymax]
+        self.declare_parameter('uav_id', 'x1')
+        self.declare_parameter('num_uavs', 3)
+        self.declare_parameter('area_bounds', [-5,5,-5,5])
         self.declare_parameter('rows', 3)
 
-        self.uav_list = self.get_parameter('uav_list').value
+        self.uav_id = self.get_parameter('uav_id').value
+        self.num_uavs = self.get_parameter('num_uavs').value
         self.area = self.get_parameter('area_bounds').value
         self.rows = self.get_parameter('rows').value
 
-        # Create publishers for each UAV
-        self.publishers = {uav: self.create_publisher(PoseArray, f'/{uav}/nav/waypoints', 10)
-                           for uav in self.uav_list}
+        # Map UAV ID to index for slice assignment
+        uav_ids = [f"x{i+1}" for i in range(self.num_uavs)]
+        self.uav_index = uav_ids.index(self.uav_id)
 
-        self.get_logger().info(f"SwarmCoordinator ready for UAVs: {self.uav_list}")
-        self.publish_waypoints()  # send initial waypoints
+        # Publisher for this UAV’s waypoints
+        topic = f'/{self.uav_id}/nav/waypoints'
+        self.pub = self.create_publisher(PoseArray, topic, 10)
+
+        self.get_logger().info(f"Coordinator ready for {self.uav_id}")
+
+        # Publish initial waypoints
+        self.publish_waypoints()
 
     def publish_waypoints(self):
         xmin, xmax, ymin, ymax = self.area
@@ -31,27 +38,27 @@ class SwarmCoordinator(Node):
         height = ymax - ymin
         row_height = height / self.rows
 
-        for i, uav in enumerate(self.uav_list):
-            poses = PoseArray()
-            poses.header.frame_id = 'world'
+        # Slice for this UAV
+        slice_width = width / self.num_uavs
+        x_start = xmin + self.uav_index * slice_width
+        x_end = xmin + (self.uav_index + 1) * slice_width
 
-            # Each UAV gets a vertical slice
-            x_start = xmin + i * width / len(self.uav_list)
-            x_end = xmin + (i + 1) * width / len(self.uav_list)
+        poses = PoseArray()
+        poses.header.frame_id = 'world'
 
-            # Lawn-mower pattern
-            for row in range(self.rows):
-                y = ymin + row * row_height
-                x_positions = [x_start, x_end] if row % 2 == 0 else [x_end, x_start]
-                for x in x_positions:
-                    pose = Pose()
-                    pose.position.x = x
-                    pose.position.y = y
-                    pose.position.z = 1.0
-                    poses.poses.append(pose)
+        # Lawn-mower pattern
+        for row in range(self.rows):
+            y = ymin + row * row_height
+            x_positions = [x_start, x_end] if row % 2 == 0 else [x_end, x_start]
+            for x in x_positions:
+                pose = Pose()
+                pose.position.x = x
+                pose.position.y = y
+                pose.position.z = 1.0
+                poses.poses.append(pose)
 
-            self.publishers[uav].publish(poses)
-            self.get_logger().info(f"Published {len(poses.poses)} waypoints to {uav}")
+        self.pub.publish(poses)
+        self.get_logger().info(f"Published {len(poses.poses)} waypoints for {self.uav_id}")
 
 
 def main(args=None):
