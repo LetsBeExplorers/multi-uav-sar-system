@@ -23,7 +23,7 @@ gz sim "$(pwd)/sim/worlds/$WORLD_FILE" &
 sleep 3
 
 echo "Starting ROS-Gazebo bridge..."
-NUM_UAVS=2
+NUM_UAVS=3
 
 for i in $(seq 1 $NUM_UAVS)
 do
