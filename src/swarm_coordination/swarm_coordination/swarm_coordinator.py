@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import time
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Pose, PoseArray
@@ -30,6 +31,7 @@ class SwarmCoordinator(Node):
         self.get_logger().info(f"Coordinator ready for {self.uav_id}")
 
         # Publish initial waypoints
+        time.sleep(1)
         self.publish_waypoints()
 
     def publish_waypoints(self):
