@@ -30,9 +30,9 @@ class SwarmCoordinator(Node):
 
         self.get_logger().info(f"Coordinator ready for {self.uav_id}")
 
-        # Publish initial waypoints
+        # Publish initial waypoints every 0.5s after a wait
         time.sleep(1)
-        self.publish_waypoints()
+        self.timer = self.create_timer(0.5, self.publish_waypoints)
 
     def publish_waypoints(self):
         xmin, xmax, ymin, ymax = self.area
