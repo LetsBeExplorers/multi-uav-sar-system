@@ -23,11 +23,9 @@ gz sim "$(pwd)/sim/worlds/$WORLD_FILE" &
 sleep 3
 
 echo "Starting ROS-Gazebo bridge..."
-NUM_UAVS=3
 
-for i in $(seq 1 $NUM_UAVS)
-do
-  UAV="x$i"
-  ros2 run ros_gz_bridge parameter_bridge \
-  /model/$UAV/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist &
-done
+# Single bridge node mapping all UAV cmd_vel topics
+ros2 run ros_gz_bridge parameter_bridge \
+  /model/x1/cmd_vel@geometry_msgs/msg/Twist@gz.msgs.Twist \
+  /model/x2/cmd_vel@geometry_msgs/msg/Twist@gz.msgs.Twist \
+  /model/x3/cmd_vel@geometry_msgs/msg/Twist@gz.msgs.Twist &
