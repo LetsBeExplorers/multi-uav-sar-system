@@ -57,21 +57,29 @@ PARAM_FILE="$PWD/src/uav_platform/config/platform.yaml"
 declare -A NODE_PACKAGE=(
     [platform_interface]=uav_platform
     [gazebo_driver]=uav_platform
-    [path_executor]=navigation       # skip for now if not ready
-    [swarm_coordinator]=swarm_coordination  # skip for now
+    [path_executor]=navigation
+    [swarm_coordinator]=swarm_coordination
 )
 
-NODE_LIST=(platform_interface gazebo_driver)
-
 # launch
+PLATFORM_NODES=(platform_interface gazebo_driver)
+OTHER_NODES=(path_executor swarm_coordinator)
+
 for UAV in "${UAV_LIST[@]}"; do
     echo "Launching nodes for UAV $UAV..."
 
-    for NODE in "${NODE_LIST[@]}"; do
+    for NODE in "${PLATFORM_NODES[@]}"; do
         PKG=${NODE_PACKAGE[$NODE]}
         ros2 run $PKG $NODE \
             --ros-args --params-file "$PARAM_FILE" \
             -p uav_name:=$UAV \
+            -r __node:=${NODE}_$UAV &
+    done
+
+    for NODE in "${OTHER_NODES[@]}"; do
+        PKG=${NODE_PACKAGE[$NODE]}
+        ros2 run $PKG $NODE \
+            --ros-args -p uav_name:=$UAV \
             -r __node:=${NODE}_$UAV &
     done
 done
