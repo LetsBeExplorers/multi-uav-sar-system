@@ -7,11 +7,11 @@ stop_uavs() {
     echo "Stopping UAV system..."
 
     # Stop UAV nodes
-    pkill -f platform_interface
-    pkill -f gazebo_driver
-    pkill -f swarm_coordination
-    pkill -f mission_manager
-    pkill -f path_executor
+    pkill -f platform_interface 2>/dev/null
+    pkill -f gazebo_driver 2>/dev/null
+    pkill -f swarm_coordinator 2>/dev/null
+    pkill -f mission_manager 2>/dev/null
+    pkill -f path_executor 2>/dev/null
 
     # Kill stuck ROS runners
     pkill -f "ros2 run"
@@ -29,7 +29,7 @@ echo "Cleaning old UAV processes..."
 
 pkill -f platform_interface 2>/dev/null
 pkill -f gazebo_driver 2>/dev/null
-pkill -f swarm_coordination 2>/dev/null
+pkill -f swarm_coordinator 2>/dev/null
 pkill -f mission_manager 2>/dev/null
 pkill -f path_executor 2>/dev/null
 pkill -f "ros2 run" 2>/dev/null
