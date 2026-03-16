@@ -57,9 +57,9 @@
     <!-- ===== Landing Pads ===== -->
     <!-- UAV1 Pad (Red) -->
     <model name="pad_x1">
+      <static>true</static>
       <pose>-3 0 0 0 0 0</pose>
       <link name="link">
-        <static>true</static>
         <visual name="visual">
           <geometry>
             <cylinder>
@@ -77,9 +77,9 @@
 
     <!-- UAV2 Pad (Green) -->
     <model name="pad_x2">
+      <static>true</static>
       <pose>0 0 0 0 0 0</pose>
       <link name="link">
-        <static>true</static>
         <visual name="visual">
           <geometry>
             <cylinder>
@@ -97,9 +97,9 @@
 
     <!-- UAV3 Pad (Blue) -->
     <model name="pad_x3">
+      <static>true</static>
       <pose>3 0 0 0 0 0</pose>
       <link name="link">
-        <static>true</static>
         <visual name="visual">
           <geometry>
             <cylinder>
