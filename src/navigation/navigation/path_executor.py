@@ -25,50 +25,62 @@ class PathExecutor(Node):
             10
         )
 
+        # Internal state
+        self.waypoints = []
+        self.current_index = 0
+
+        # Placeholder for UAV position (replace with odometry in real system)
+        self.uav_x = 0.0
+        self.uav_y = 0.0
+
+        # timer callback for stepping through waypoints
+        self.timer = self.create_timer(0.1, self.execute_waypoint)  # 10 Hz
+
         self.get_logger().info(f"Path Executor ready for {uav}")
 
+    # store incoming waypoints from coordinator
     def waypoint_callback(self, msg):
-
         if msg.poses:
-            curr_x = msg.poses[0].position.x
-            curr_y = msg.poses[0].position.y
+            self.waypoints = list(msg.poses)
+            if self.current_index >= len(self.waypoints):
+                self.current_index = 0
+            self.get_logger().info(f"Received {len(self.waypoints)} waypoints")
 
-        for i, pose in enumerate(msg.poses):
+    # move UAV toward the current waypoint one step at a time
+    def execute_waypoint(self):
+        if self.current_index >= len(self.waypoints):
+            return  # nothing to do
 
-            x, y = pose.position.x, pose.position.y
-            dx, dy = x - curr_x, y - curr_y
+        target = self.waypoints[self.current_index]
+        x, y = target.position.x, target.position.y
 
-            self.get_logger().info(f"Waypoint {i+1}: ({x:.1f}, {y:.1f})")
+        dx = x - self.uav_x
+        dy = y - self.uav_y
 
-            cmd = Twist()
+        cmd = Twist()
 
-            # Move along dominant axis
-            if abs(dx) > abs(dy):
-                cmd.linear.x = 1.0 if dx > 0 else -1.0
-                distance = abs(dx)
-            else:
-                cmd.linear.y = 1.0 if dy > 0 else -1.0
-                distance = abs(dy)
+        # move along row first
+        cmd.linear.x = 1.0 if x > self.uav_x else -1.0
+        cmd.linear.y = 0.0
 
-            move_time = distance / 1.0  # speed = 1 m/s
+        # move up to next row
+        if abs(self.uav_x - x) < 0.1:
+            cmd.linear.x = 0.0
+            cmd.linear.y = 1.0 if y > self.uav_y else -1.0
 
-            # Move
-            self.cmd_pub.publish(cmd)
-            time.sleep(move_time)
+        self.cmd_pub.publish(cmd)
 
-            # Stop (prevents drift)
-            stop = Twist()
-            for _ in range(10):
-                self.cmd_pub.publish(stop)
-                time.sleep(0.1)
+        # simple “reached waypoint” check (distance threshold)
+        if abs(dx) < 0.1 and abs(dy) < 0.1:
+            self.current_index += 1
 
-            curr_x, curr_y = x, y
-            time.sleep(1.0)
-
-        self.get_logger().info("Finished waypoints")
+        # in a real system, self.uav_x / self.uav_y would be updated from odometry
 
 def main(args=None):
     rclpy.init(args=args)
     node = PathExecutor()
     rclpy.spin(node)
     rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
