@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'swarm_coordinator = swarm_coordination.swarm_coordinator:main',
         ],
     },
 )
