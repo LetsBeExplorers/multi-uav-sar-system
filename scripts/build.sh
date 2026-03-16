@@ -80,11 +80,12 @@ for UAV in "${UAV_LIST[@]}"; do
         PKG=${NODE_PACKAGE[$NODE]}
 
         if [[ "$NODE" == "swarm_coordinator" ]]; then
+            sleep 1
             ros2 run $PKG $NODE \
                 --ros-args \
                 -p uav_id:=$UAV \
                 -p num_uavs:=3 \
-                -p area_bounds:="[-5,5,-5,5]" \
+                -p area_bounds:="[-10,10,-10,10]" \
                 -p rows:=3 \
                 -r __node:=${NODE}_$UAV &
         else

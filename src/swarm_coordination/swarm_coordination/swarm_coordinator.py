@@ -11,7 +11,7 @@ class SwarmCoordinator(Node):
         # Parameters
         self.declare_parameter('uav_id', 'x1')
         self.declare_parameter('num_uavs', 3)
-        self.declare_parameter('area_bounds', [-5,5,-5,5])
+        self.declare_parameter('area_bounds', [-10,10,-10,10])
         self.declare_parameter('rows', 3)
 
         self.uav_id = self.get_parameter('uav_id').value
