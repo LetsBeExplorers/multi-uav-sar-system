@@ -21,7 +21,7 @@ class SwarmCoordinator(Node):
 
         # Map UAV ID to index for slice assignment
         uav_ids = [f"x{i+1}" for i in range(self.num_uavs)]
-        self.uav_index = uav_ids.index(self.uav_id)
+        self.uav_index = uav_ids.index(str(self.uav_id))  # ensure it's a string
 
         # Publisher for this UAV’s waypoints
         topic = f'/{self.uav_id}/nav/waypoints'
