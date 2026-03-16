@@ -58,7 +58,7 @@
     <!-- UAV1 Pad (Red) -->
     <model name="pad_x1">
       <static>true</static>
-      <pose>-10 0 0 0 0 0</pose>
+      <pose>-3 -11 0 0 0 0</pose>
       <link name="link">
         <visual name="visual">
           <geometry>
@@ -78,7 +78,7 @@
     <!-- UAV2 Pad (Green) -->
     <model name="pad_x2">
       <static>true</static>
-      <pose>0 0 0 0 0 0</pose>
+      <pose>0 -11 0 0 0 0</pose>
       <link name="link">
         <visual name="visual">
           <geometry>
@@ -98,7 +98,7 @@
     <!-- UAV3 Pad (Blue) -->
     <model name="pad_x3">
       <static>true</static>
-      <pose>10 0 0 0 0 0</pose>
+      <pose>3 -11 0 0 0 0</pose>
       <link name="link">
         <visual name="visual">
           <geometry>
