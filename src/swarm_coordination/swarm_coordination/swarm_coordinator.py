@@ -60,7 +60,6 @@ class SwarmCoordinator(Node):
                 poses.poses.append(pose)
 
         self.pub.publish(poses)
-        self.get_logger().info(f"Published {len(poses.poses)} waypoints for {self.uav_id}")
 
 
 def main(args=None):
