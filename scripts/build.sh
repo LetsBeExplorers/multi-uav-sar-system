@@ -49,68 +49,34 @@ source install/setup.bash
 
 sleep 2
 
-############################
-# UAV 1
-############################
-UAV1=x1
+# config 
+UAV_LIST=(x1 x2 x3)
+PARAM_FILE="$PWD/src/uav_platform/config/platform.yaml"
 
-echo "Launching UAV $UAV1..."
+# node → package mapping
+declare -A NODE_PACKAGE=(
+    [platform_interface]=uav_platform
+    [gazebo_driver]=uav_platform
+    [path_executor]=navigation       # skip for now if not ready
+    [swarm_coordinator]=swarm_coordination  # skip for now
+)
 
-ros2 run uav_platform platform_interface \
-  --ros-args --params-file "$(pwd)/src/uav_platform/config/platform.yaml" \
-  -p uav_name:=$UAV1 \
-  -r __node:=platform_interface_$UAV1 &
+NODE_LIST=(platform_interface gazebo_driver)
 
-ros2 run uav_platform gazebo_driver \
-  --ros-args --params-file "$(pwd)/src/uav_platform/config/platform.yaml" \
-  -p uav_name:=$UAV1 \
-  -r __node:=gazebo_driver_$UAV1 &
+# launch
+for UAV in "${UAV_LIST[@]}"; do
+    echo "Launching nodes for UAV $UAV..."
 
-ros2 run navigation path_executor \
-  --ros-args -p uav_name:=$UAV1 \
-  -r __node:=path_executor_$UAV1 &
-
-############################
-# UAV 2
-############################
-UAV2=x2
-
-echo "Launching UAV $UAV2..."
-
-ros2 run uav_platform platform_interface \
-  --ros-args --params-file "$(pwd)/src/uav_platform/config/platform.yaml" \
-  -p uav_name:=$UAV2 \
-  -r __node:=platform_interface_$UAV2 &
-
-ros2 run uav_platform gazebo_driver \
-  --ros-args --params-file "$(pwd)/src/uav_platform/config/platform.yaml" \
-  -p uav_name:=$UAV2 \
-  -r __node:=gazebo_driver_$UAV2 &
-
-ros2 run navigation path_executor \
-  --ros-args -p uav_name:=$UAV2 \
-  -r __node:=path_executor_$UAV2 &
+    for NODE in "${NODE_LIST[@]}"; do
+        PKG=${NODE_PACKAGE[$NODE]}
+        ros2 run $PKG $NODE \
+            --ros-args --params-file "$PARAM_FILE" \
+            -p uav_name:=$UAV \
+            -r __node:=${NODE}_$UAV &
+    done
+done
 
 sleep 3
-
-echo "Sending test waypoints to both UAVs..."
-
-# UAV 1 waypoints
-ros2 topic pub --once /x1/nav/waypoints geometry_msgs/PoseArray "
-poses:
-- position: {x: 3.0, y: 0.0, z: 1.0}
-- position: {x: 3.0, y: 3.0, z: 1.0}
-- position: {x: 0.0, y: 3.0, z: 1.0}
-- position: {x: 0.0, y: 0.0, z: 1.0}
-" &
-
-# UAV 2 waypoints (higher altitude)
-ros2 topic pub --once /x2/nav/waypoints geometry_msgs/PoseArray "
-poses:
-- position: {x: 3.0, y: 0.0, z: 2.5}
-- position: {x: 3.0, y: 3.0, z: 2.5}
-- position: {x: 0.0, y: 3.0, z: 2.5}
-- position: {x: 0.0, y: 0.0, z: 2.5}
-" &
+echo "All current UAV nodes launched for all UAVs."
 
 wait
