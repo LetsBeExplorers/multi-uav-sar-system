@@ -143,5 +143,73 @@
               name="gz::sim::systems::VelocityControl"/>
     </include>
 
+    <model name="search_area_outline">
+      <static>true</static>  <!-- entire model is static -->
+
+      <!-- Bottom line -->
+      <link name="line_bottom">
+        <visual name="vis">
+          <geometry>
+            <box>
+              <size>20 0.1 0.05</size> <!-- 20m wide, thin -->
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 0 0 1</ambient>
+            <diffuse>1 0 0 1</diffuse>
+          </material>
+        </visual>
+        <pose>0 -10 0.01 0 0 0</pose>
+      </link>
+
+      <!-- Top line -->
+      <link name="line_top">
+        <visual name="vis">
+          <geometry>
+            <box>
+              <size>20 0.1 0.05</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 0 0 1</ambient>
+            <diffuse>1 0 0 1</diffuse>
+          </material>
+        </visual>
+        <pose>0 10 0.01 0 0 0</pose>
+      </link>
+
+      <!-- Left line -->
+      <link name="line_left">
+        <visual name="vis">
+          <geometry>
+            <box>
+              <size>0.1 20 0.05</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 0 0 1</ambient>
+            <diffuse>1 0 0 1</diffuse>
+          </material>
+        </visual>
+        <pose>-10 0 0.01 0 0 0</pose>
+      </link>
+
+      <!-- Right line -->
+      <link name="line_right">
+        <visual name="vis">
+          <geometry>
+            <box>
+              <size>0.1 20 0.05</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 0 0 1</ambient>
+            <diffuse>1 0 0 1</diffuse>
+          </material>
+        </visual>
+        <pose>10 0 0.01 0 0 0</pose>
+      </link>
+    </model>
+
   </world>
 </sdf>
