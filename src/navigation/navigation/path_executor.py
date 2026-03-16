@@ -28,7 +28,9 @@ class PathExecutor(Node):
 
     def waypoint_callback(self, msg):
 
-        curr_x, curr_y = 0.0, 0.0  # assumed position
+        if msg.poses:
+            curr_x = msg.poses[0].position.x
+            curr_y = msg.poses[0].position.y
 
         for i, pose in enumerate(msg.poses):
 
