@@ -54,37 +54,88 @@
       </link>
     </model>
 
-    <!-- Quadcopter -->
+    <!-- ===== Landing Pads ===== -->
+    <!-- UAV1 Pad (Red) -->
+    <model name="pad_x1">
+      <pose>-3 0 0 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry>
+            <cylinder>
+              <radius>0.3</radius>
+              <length>0.05</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <ambient>1 0 0 1</ambient>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- UAV2 Pad (Green) -->
+    <model name="pad_x2">
+      <pose>0 0 0 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry>
+            <cylinder>
+              <radius>0.3</radius>
+              <length>0.05</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <ambient>0 1 0 1</ambient>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- UAV3 Pad (Blue) -->
+    <model name="pad_x3">
+      <pose>3 0 0 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry>
+            <cylinder>
+              <radius>0.3</radius>
+              <length>0.05</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <ambient>0 0 1 1</ambient>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ===== UAVs ===== -->
+    <!-- UAV1 -->
     <include>
       <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/X3 UAV</uri>
       <name>x1</name>
-      <pose>0 0 0.5 0 0 0</pose>
-
-      <!-- Kinematic velocity control plugin -->
+      <pose>-3 0 0.5 0 0 0</pose>
       <plugin filename="gz-sim-velocity-control-system"
               name="gz::sim::systems::VelocityControl"/>
     </include>
 
-    <!-- Second Quadcopter -->
+    <!-- UAV2 -->
     <include>
       <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/X3 UAV</uri>
       <name>x2</name>
-      <pose>0.5 0 0.5 0 0 0</pose>
-
+      <pose>0 0 0.5 0 0 0</pose>
       <plugin filename="gz-sim-velocity-control-system"
               name="gz::sim::systems::VelocityControl"/>
     </include>
-    
-    <!-- Third Quadcopter -->
+
+    <!-- UAV3 -->
     <include>
       <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/X3 UAV</uri>
       <name>x3</name>
-      <pose>0 0.5 0.5 0 0 0</pose>
-
+      <pose>3 0 0.5 0 0 0</pose>
       <plugin filename="gz-sim-velocity-control-system"
               name="gz::sim::systems::VelocityControl"/>
     </include>
-
 
   </world>
 </sdf>
