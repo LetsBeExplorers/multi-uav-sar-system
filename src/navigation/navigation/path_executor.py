@@ -31,12 +31,22 @@ class PathExecutor(Node):
         self.waypoints = []
         self.current_index = 0
 
-        # Current UAV position (simulate for now; can be replaced with odometry)
-        self.uav_x = 0.0
-        self.uav_y = 0.0
+        # Initialize UAV position at its pad
+        self.uav_x, self.uav_y = self.get_starting_pad(uav)
         self.speed = 1.0  # meters per second (used for dynamic sleep)
 
         self.get_logger().info(f"Path Executor ready for {uav}")
+
+    # Hacky WARNING - dont try this at home
+    def get_starting_pad(self, uav):
+        if uav == 'x1':
+            return -3.0, -11.0
+        elif uav == 'x2':
+            return 0.0, -11.0
+        elif uav == 'x3':
+            return 3.0, -11.0
+        else:
+            return 0.0, 0.0  # fallback
 
     # Store incoming waypoints from coordinator
     def waypoint_callback(self, msg):
@@ -56,7 +66,7 @@ class PathExecutor(Node):
                 dy = y - self.uav_y
 
                 cmd = Twist()
-                
+
                 # Row-first lawn-mower logic: always move along X first
                 if abs(x - self.uav_x) >= 0.1:  # still need threshold check
                     cmd.linear.x = 1.0 if x > self.uav_x else -1.0
