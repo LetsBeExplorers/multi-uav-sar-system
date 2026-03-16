@@ -59,6 +59,7 @@
     <model name="pad_x1">
       <pose>-3 0 0 0 0 0</pose>
       <link name="link">
+        <static>true</static>
         <visual name="visual">
           <geometry>
             <cylinder>
@@ -68,6 +69,7 @@
           </geometry>
           <material>
             <ambient>1 0 0 1</ambient>
+            <diffuse>1 0 0 1</diffuse>
           </material>
         </visual>
       </link>
@@ -77,6 +79,7 @@
     <model name="pad_x2">
       <pose>0 0 0 0 0 0</pose>
       <link name="link">
+        <static>true</static>
         <visual name="visual">
           <geometry>
             <cylinder>
@@ -86,6 +89,7 @@
           </geometry>
           <material>
             <ambient>0 1 0 1</ambient>
+            <diffuse>0 1 0 1</diffuse>
           </material>
         </visual>
       </link>
@@ -95,6 +99,7 @@
     <model name="pad_x3">
       <pose>3 0 0 0 0 0</pose>
       <link name="link">
+        <static>true</static>
         <visual name="visual">
           <geometry>
             <cylinder>
@@ -104,6 +109,7 @@
           </geometry>
           <material>
             <ambient>0 0 1 1</ambient>
+            <diffuse>0 0 1 1</diffuse>
           </material>
         </visual>
       </link>
