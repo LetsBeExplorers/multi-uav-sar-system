@@ -27,6 +27,9 @@ class MissionManager(Node):
             10
         )
 
+        # Initialize completion variables and send debug message
+        self.done_uavs = set()
+        self.total_uavs = 3   # match your system
         self.get_logger().debug("Mission Manager ready")
 
     # Publishes state
@@ -37,7 +40,18 @@ class MissionManager(Node):
 
     # Print incoming status messages
     def status_callback(self, msg):
-        print(msg.data)
+        text = msg.data
+        print(text)
+
+        # Detect DONE messages
+        if "DONE" in text:
+            # Extract UAV name (e.g., [x1])
+            uav = text.split("]")[0] + "]"
+            self.done_uavs.add(uav)
+
+            # Check if all UAVs finished
+            if len(self.done_uavs) == self.total_uavs:
+                self.publish_status("[MISSION] COMPLETE")
 
     # Send start command
     def send_start(self):
@@ -45,8 +59,9 @@ class MissionManager(Node):
         if self.state == "RUNNING":
             print("Mission already running")
             return
-        # If not, set state
+        # If not, set state and clear completion status
         self.state = "RUNNING"
+        self.done_uavs.clear()
 
         # Send status
         self.start_pub.publish(Empty())
