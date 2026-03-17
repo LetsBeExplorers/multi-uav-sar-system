@@ -123,6 +123,12 @@
       <pose>-3 -11 0.5 0 0 0</pose>
       <plugin filename="gz-sim-velocity-control-system"
               name="gz::sim::systems::VelocityControl"/>
+
+      <plugin
+        filename="gz-sim-odometry-publisher-system"
+        name="gz::sim::systems::OdometryPublisher">
+        <dimensions>3</dimensions>
+      </plugin>
     </include>
 
     <!-- UAV2 -->
@@ -132,6 +138,12 @@
       <pose>0 -11 0.5 0 0 0</pose>
       <plugin filename="gz-sim-velocity-control-system"
               name="gz::sim::systems::VelocityControl"/>
+
+      <plugin
+        filename="gz-sim-odometry-publisher-system"
+        name="gz::sim::systems::OdometryPublisher">
+        <dimensions>3</dimensions>
+      </plugin>
     </include>
 
     <!-- UAV3 -->
@@ -141,6 +153,12 @@
       <pose>3 -11 0.5 0 0 0</pose>
       <plugin filename="gz-sim-velocity-control-system"
               name="gz::sim::systems::VelocityControl"/>
+
+      <plugin
+        filename="gz-sim-odometry-publisher-system"
+        name="gz::sim::systems::OdometryPublisher">
+        <dimensions>3</dimensions>
+      </plugin>
     </include>
 
     <model name="search_area_outline">
