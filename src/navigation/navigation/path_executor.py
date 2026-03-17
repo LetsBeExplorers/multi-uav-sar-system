@@ -43,6 +43,7 @@ class PathExecutor(Node):
         # Initialize UAV position at its pad
         self.uav_x, self.uav_y = self.get_starting_pad(uav)
         self.speed = 2.0  # meters per second (used for dynamic sleep)
+        self.timer = self.create_timer(0.1, self.move_step)
 
         self.get_logger().info(f"Path Executor ready for {uav}")
 
@@ -73,48 +74,52 @@ class PathExecutor(Node):
 
             self.get_logger().info(f"Received {len(self.waypoints)} waypoints")
 
-            # Immediately move through waypoints
-            if self.current_index < len(self.waypoints):
+    # Move toward current waypoint using odometry feedback
+    def move_step(self):
 
-                target = self.waypoints[self.current_index]
-                x, y = target.position.x, target.position.y
+        if not self.waypoints:
+            return
 
-                dx = x - self.uav_x
-                dy = y - self.uav_y
+        if self.current_index < len(self.waypoints):
 
-                cmd = Twist()
+            target = self.waypoints[self.current_index]
+            x, y = target.position.x, target.position.y
 
-                # Row-first lawn-mower logic: always move along X first
-                if abs(x - self.uav_x) >= 0.1:  # still need threshold check
-                    cmd.linear.x = 1.0 if x > self.uav_x else -1.0
-                    cmd.linear.y = 0.0
-                else:
-                    # reached X, now move along Y
-                    cmd.linear.x = 0.0
-                    if abs(y - self.uav_y) >= 0.1:
-                        cmd.linear.y = 1.0 if y > self.uav_y else -1.0
+            dx = x - self.uav_x
+            dy = y - self.uav_y
 
-                # Publish velocity
-                self.cmd_pub.publish(cmd)
+            cmd = Twist()
 
-                # Check if we've reached the waypoint (using real position now)
-                if abs(self.uav_x - x) < 0.2 and abs(self.uav_y - y) < 0.2:
+            # Row-first lawn-mower logic: always move along X first
+            if abs(x - self.uav_x) >= 0.1:  # still need threshold check
+                cmd.linear.x = 1.0 if x > self.uav_x else -1.0
+                cmd.linear.y = 0.0
+            else:
+                # reached X, now move along Y
+                cmd.linear.x = 0.0
+                if abs(y - self.uav_y) >= 0.1:
+                    cmd.linear.y = 1.0 if y > self.uav_y else -1.0
 
-                    # Stop to prevent drift
-                    stop = Twist()
-                    self.cmd_pub.publish(stop)
+            # Publish velocity
+            self.cmd_pub.publish(cmd)
 
-                    # Update current index
-                    self.current_index += 1
+            # Check if we've reached the waypoint (using real position now)
+            if abs(self.uav_x - x) < 0.2 and abs(self.uav_y - y) < 0.2:
 
-                    # Log the waypoint
-                    self.get_logger().info(
-                        f"Waypoint {self.current_index}: ({x:.2f}, {y:.2f})"
-                    )
+                # Stop to prevent drift
+                stop = Twist()
+                self.cmd_pub.publish(stop)
 
-            if self.current_index >= len(self.waypoints):
-                self.get_logger().info("Finished all waypoints")
+                # Update current index
+                self.current_index += 1
 
+                # Log the waypoint
+                self.get_logger().info(
+                    f"Waypoint {self.current_index}: ({x:.2f}, {y:.2f})"
+                )
+
+        if self.current_index >= len(self.waypoints) and self.waypoints:
+            self.get_logger().info("Finished all waypoints")
 
 def main(args=None):
     rclpy.init(args=args)
