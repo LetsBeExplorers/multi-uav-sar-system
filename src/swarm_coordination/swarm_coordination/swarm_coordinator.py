@@ -48,7 +48,7 @@ class SwarmCoordinator(Node):
         xmin, xmax, ymin, ymax = self.area
         width = xmax - xmin
         height = ymax - ymin
-        row_height = height / self.rows
+        row_height = height / (self.rows - 1)
 
         # Slice for this UAV
         slice_width = width / self.num_uavs
