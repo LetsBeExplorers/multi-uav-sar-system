@@ -28,4 +28,7 @@ echo "Starting ROS-Gazebo bridge..."
 ros2 run ros_gz_bridge parameter_bridge \
   /model/x1/cmd_vel@geometry_msgs/msg/Twist@gz.msgs.Twist \
   /model/x2/cmd_vel@geometry_msgs/msg/Twist@gz.msgs.Twist \
-  /model/x3/cmd_vel@geometry_msgs/msg/Twist@gz.msgs.Twist &
+  /model/x3/cmd_vel@geometry_msgs/msg/Twist@gz.msgs.Twist \
+  /model/x1/odometry@nav_msgs/msg/Odometry@gz.msgs.Odometry \
+  /model/x2/odometry@nav_msgs/msg/Odometry@gz.msgs.Odometry \
+  /model/x3/odometry@nav_msgs/msg/Odometry@gz.msgs.Odometry &
