@@ -15,7 +15,8 @@ class MissionManager(Node):
         self.start_pub = self.create_publisher(Empty, '/mission/start', 10)
         self.stop_pub = self.create_publisher(Empty, '/mission/stop', 10)
 
-        # Sends status/drone updates
+        # Sets initial state and where to send status updates
+        self.state = "IDLE"
         self.status_pub = self.create_publisher(String, '/mission/status', 10)
 
         # Subscriber (status/logs)
@@ -36,17 +37,35 @@ class MissionManager(Node):
 
     # Print incoming status messages
     def status_callback(self, msg):
-        print(f"[STATUS] {msg.data}")
+        print(msg.data)
 
     # Send start command
     def send_start(self):
+        # Check to see if mission is already running
+        if self.state == "RUNNING":
+            print("Mission already running")
+            return
+        # If not, set state
+        self.state = "RUNNING"
+
+        # Send status
         self.start_pub.publish(Empty())
-        self.get_logger().info("START sent")
+        self.publish_status("[MISSION] STARTED")
+        self.get_logger().debug("START sent")
 
     # Send stop command
     def send_stop(self):
+        # Check to see if mission is running
+        if self.state == "IDLE":
+            print("Mission not running")
+            return
+        # If not, set state
+        self.state = "STOPPED"
+        
+        # Send status
         self.stop_pub.publish(Empty())
-        self.get_logger().info("STOP sent")
+        self.publish_status("[MISSION] STOPPED")
+        self.get_logger().debug("STOP sent")
 
 
 def main():
