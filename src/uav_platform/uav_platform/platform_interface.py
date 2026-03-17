@@ -22,20 +22,18 @@ class PlatformInterface(Node):
         )
 
         # Retrieve parameter values
-        uav_name = self.get_parameter('uav_name').value
+        self.uav_name = self.get_parameter('uav_name').value
         self.max_linear = self.get_parameter('max_linear_speed').value
         self.max_vertical = self.get_parameter('max_vertical_speed').value
-        self.takeoff_vel_thresh = self.get_parameter('takeoff_velocity_threshold').value
-        self.landing_vel_thresh = self.get_parameter('landing_velocity_threshold').value
+        self.takeoff_thresh = self.get_parameter('takeoff_velocity_threshold').value
+        self.landing_thresh = self.get_parameter('landing_velocity_threshold').value
 
         # Topics
-        self.cmd_in_topic = f'/{uav_name}/platform/cmd_vel'
-        self.driver_topic = f'/{uav_name}/driver/cmd_vel'
+        self.cmd_in_topic = f'/{self.uav_name}/platform/cmd_vel'
+        self.driver_topic = f'/{self.uav_name}/driver/cmd_vel'
 
-        # Publish information to the drivers
+        # Publishers / Subscribers
         self.cmd_pub = self.create_publisher(Twist, self.driver_topic, 10)
-
-        # Subscriber: receives high-level velocity commands
         self.cmd_sub = self.create_subscription(
             Twist,
             self.cmd_in_topic,
@@ -43,52 +41,50 @@ class PlatformInterface(Node):
             10
         )
 
-        # Set starting state
-        self.flight_state = "GROUNDED"
-
-        # Debug message and status to mission manager
-        self.get_logger().debug(f"PlatformInterface ready for UAV: {uav_name}")
+        # Optional status publisher (for future safety alerts)
         self.status_pub = self.create_publisher(String, '/mission/status', 10)
 
-    # Publishes node/drone status
+        # Internal state (LOW-LEVEL)
+        self.state = "GROUNDED"
+
+        self.get_logger().debug(f"PlatformInterface ready for {self.uav_name}")
+
+    # Status publishing (unused for now)
     def publish_status(self, text):
         msg = String()
         msg.data = text
         self.status_pub.publish(msg)
 
-    # State Machine Based on Commanded Motion
-    def update_flight_state(self, vertical_velocity):
+    # Flight state detection (internal only)
+    def update_flight_state(self, vz):
 
-        # Detect takeoff
-        if vertical_velocity > self.takeoff_vel_thresh:
-            if self.flight_state != "AIRBORNE":
-                self.flight_state = "AIRBORNE"
-                self.get_logger().info("Takeoff detected → AIRBORNE")
+        if vz > self.takeoff_thresh and self.state != "AIRBORNE":
+            self.state = "AIRBORNE"
+            self.get_logger().debug("AIRBORNE")
 
-        # Detect landing
-        elif vertical_velocity < self.landing_vel_thresh:
-            if self.flight_state != "GROUNDED":
-                self.flight_state = "GROUNDED"
-                self.get_logger().info("Landing detected → GROUNDED")
+        elif vz < self.landing_thresh and self.state != "GROUNDED":
+            self.state = "GROUNDED"
+            self.get_logger().debug("GROUNDED")
 
-    # ===== Command Processing =====
+    # Command processing
     def process_command(self, msg):
+
         safe_msg = Twist()
 
-        # Clamp horizontal velocities to prevent unsafe speeds
+        # Clamp horizontal velocity
         safe_msg.linear.x = max(min(msg.linear.x, self.max_linear), -self.max_linear)
         safe_msg.linear.y = max(min(msg.linear.y, self.max_linear), -self.max_linear)
 
-        # Clamp vertical velocity separately (typically stricter limits)
+        # Clamp vertical velocity
         safe_msg.linear.z = max(min(msg.linear.z, self.max_vertical), -self.max_vertical)
 
-        # Allow yaw rotation without modification
+        # Pass through yaw
         safe_msg.angular.z = msg.angular.z
 
-        # Update flight state based on commanded vertical motion
+        # Update internal state
         self.update_flight_state(safe_msg.linear.z)
 
-        # Publish the safe command to the UAV driver
+        # Publish safe command
         self.cmd_pub.publish(safe_msg)
 
 def main(args=None):
