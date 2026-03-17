@@ -47,6 +47,7 @@ class PathExecutor(Node):
         # Internal state
         self.waypoints = []
         self.current_index = 0
+        self.finished = False
 
         # Initial fallback position (overwritten once odometry is received)
         self.uav_x = 0.0
@@ -117,8 +118,11 @@ class PathExecutor(Node):
                     f"Waypoint {self.current_index}: ({x:.2f}, {y:.2f})"
                 )
 
+        # Prints that the drone is finished
         if self.current_index >= len(self.waypoints) and self.waypoints:
-            self.get_logger().info("Finished all waypoints")
+            if not self.finished:
+                self.get_logger().info("Finished all waypoints")
+                self.finished = True
 
 def main(args=None):
     rclpy.init(args=args)
