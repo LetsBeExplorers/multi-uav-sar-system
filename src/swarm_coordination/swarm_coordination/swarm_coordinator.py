@@ -3,6 +3,7 @@
 import time
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import Empty
 from geometry_msgs.msg import Pose, PoseArray
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 
@@ -21,6 +22,10 @@ class SwarmCoordinator(Node):
         self.area = self.get_parameter('area_bounds').value
         self.rows = self.get_parameter('rows').value
 
+        # listeners for mission management
+        self.started = False
+        self.create_subscription(Empty, '/mission/start', self.start_cb, 10)
+
         # Map UAV ID to index for slice assignment
         uav_ids = [f"x{i+1}" for i in range(self.num_uavs)]
         self.uav_index = uav_ids.index(str(self.uav_id))  # ensure it's a string
@@ -28,7 +33,7 @@ class SwarmCoordinator(Node):
         # Publisher for this UAV’s waypoints
         topic = f'/{self.uav_id}/nav/waypoints'
 
-        self.get_logger().info(f"Coordinator ready for {self.uav_id}")
+        self.get_logger().debug(f"Coordinator ready for {self.uav_id}")
 
         # QoS profile so late subscribers still receive the last waypoint message
         qos = QoSProfile(
@@ -40,9 +45,14 @@ class SwarmCoordinator(Node):
         # Create publisher with QoS instead of default queue size
         self.publisher = self.create_publisher(PoseArray, topic, qos)
 
-        # Publish waypoints once at startup
+    # starts the callback loop when it recieves commands
+    def start_cb(self, msg):
+        if self.started:
+            return
+
+        self.started = True
+        self.get_logger().info("Mission START → publishing waypoints")
         self.publish_waypoints()
-    
 
     def publish_waypoints(self):
         xmin, xmax, ymin, ymax = self.area
