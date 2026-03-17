@@ -18,10 +18,11 @@ class GazeboDriver(Node):
         self.gz_odom_topic = f'/model/{uav_name}/odometry'
         self.state_topic = f'/{uav_name}/state/odom'
 
-        # Publisher to Gazebo
+        # Publishers: Gazebo and Platform
         self.cmd_pub = self.create_publisher(Twist, self.gz_cmd_topic, 10)
+        self.state_pub = self.create_publisher(Odometry, self.state_topic, 10)
 
-        # Subscriber from Platform Interface
+        # Subscribers from Gazebo and Platform Interface
         self.cmd_sub = self.create_subscription(
             Twist,
             self.cmd_in_topic,
@@ -29,23 +30,20 @@ class GazeboDriver(Node):
             10
         )
 
-        # State publisher to Platform
-        self.state_pub = self.create_publisher(Odometry, self.state_topic, 10)
-
-        # Subscribe to Gazebo odometry
         self.odom_sub = self.create_subscription(
             Odometry,
             self.gz_odom_topic,
-            self.publish_state,
+            self.forward_state,
             10
         )
 
+        # Debug message
         self.get_logger().debug(f"GazeboDriver ready for UAV: {uav_name}")
 
     def forward_command(self, msg):
         self.cmd_pub.publish(msg)
 
-    def publish_state(self, msg):
+    def forward_state(self, msg):
         self.state_pub.publish(msg)
 
 def main(args=None):
