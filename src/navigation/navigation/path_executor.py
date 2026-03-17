@@ -100,7 +100,7 @@ class PathExecutor(Node):
 
             # Set state and send debug message
             self.state = "EXECUTING"
-            self.get_logger().info(f"Received {len(self.waypoints)} waypoints")
+            self.get_logger().debug(f"Received {len(self.waypoints)} waypoints")
 
     # Move toward current waypoint using odometry feedback
     def move_step(self):
