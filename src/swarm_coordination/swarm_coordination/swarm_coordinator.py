@@ -23,7 +23,7 @@ class SwarmCoordinator(Node):
         self.rows = self.get_parameter('rows').value
 
         # listeners for mission management
-        self.started = False
+        self.state = "IDLE"
         self.create_subscription(Empty, '/mission/start', self.start_cb, 10)
 
         # Map UAV ID to index for slice assignment
@@ -53,15 +53,28 @@ class SwarmCoordinator(Node):
         msg.data = text
         self.status_pub.publish(msg)
 
-    # starts the callback loop when it recieves commands
+    # Sets the drone state and sends it to be published in the proper format
+    def set_state(self, new_state):
+        if self.state == new_state:
+            return  # prevent spam
+
+        self.state = new_state
+        self.publish_status(f"[{self.uav_id}] {self.state}")
+
+    # Starts the callback loop when it recieves commands
     def start_cb(self, msg):
-        if self.started:
+        # Don't start if we are already started
+        if self.state != "IDLE":
             return
 
-        self.started = True
-        self.get_logger().info("Mission START → publishing waypoints")
+        # Update state and send debug message
+        self.set_state("SEARCHING")
+        self.get_logger().debug("Mission START → publishing waypoints")
+
+        # Generate and send waypoints
         self.publish_waypoints()
 
+    # Defines the search area and sends the waypoints to navigation
     def publish_waypoints(self):
         xmin, xmax, ymin, ymax = self.area
         width = xmax - xmin
