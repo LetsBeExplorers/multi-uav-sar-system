@@ -1,7 +1,5 @@
 #!/bin/bash
 
-cd "$(dirname "$0")/.."
-
 # Source environment
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
