@@ -52,6 +52,8 @@ class PathExecutor(Node):
         # Initial fallback position (overwritten once odometry is received)
         self.uav_x = 0.0
         self.uav_y = 0.0
+        self.home_x = None
+        self.home_y = None
         self.timer = self.create_timer(0.1, self.move_step)
 
         self.get_logger().info(f"Path Executor ready for {uav}")
@@ -71,6 +73,10 @@ class PathExecutor(Node):
         if msg.poses:
             self.waypoints = list(msg.poses)
             self.current_index = 0
+
+            # Store first waypoint as landing pad (home)
+            self.home_x = self.waypoints[0].position.x
+            self.home_y = self.waypoints[0].position.y
 
             self.get_logger().info(f"Received {len(self.waypoints)} waypoints")
 
@@ -118,10 +124,19 @@ class PathExecutor(Node):
                     f"Waypoint {self.current_index}: ({x:.2f}, {y:.2f})"
                 )
 
-        # Prints that the drone is finished
+        # sends the drone home when its done
         if self.current_index >= len(self.waypoints) and self.waypoints:
+
             if not self.finished:
-                self.get_logger().info("Finished all waypoints")
+                self.get_logger().info("Returning to landing pad")
+
+                # Add landing pad as final waypoint
+                home_pose = Pose()
+                home_pose.position.x = self.home_x
+                home_pose.position.y = self.home_y
+                home_pose.position.z = 1.0
+
+                self.waypoints.append(home_pose)
                 self.finished = True
 
 def main(args=None):
