@@ -81,13 +81,13 @@ class PathExecutor(Node):
 
             # Row-first lawn-mower logic: always move along X first
             if abs(dx) >= 0.2:
-                cmd.linear.x = 1.0 if x > self.uav_x else -1.0
+                cmd.linear.x = 1.0 if dx > 0 else -1.0
                 cmd.linear.y = 0.0
             else:
                 # reached X, now move along Y
                 cmd.linear.x = 0.0
                 if abs(dy) >= 0.2:
-                    cmd.linear.y = 1.0 if y > self.uav_y else -1.0
+                    cmd.linear.y = 1.0 if dy > 0 else -1.0
 
             # Publish velocity
             self.cmd_pub.publish(cmd)
