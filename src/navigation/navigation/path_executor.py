@@ -122,7 +122,7 @@ class PathExecutor(Node):
                 self.current_index += 1
 
                 # Log the waypoint
-                self.get_logger().info(
+                self.get_logger().debug(
                     f"Waypoint {self.current_index}: ({x:.2f}, {y:.2f})"
                 )
 
