@@ -40,23 +40,12 @@ class PathExecutor(Node):
         self.waypoints = []
         self.current_index = 0
 
-        # Initialize UAV position at its pad
-        self.uav_x, self.uav_y = self.get_starting_pad(uav)
-        self.speed = 2.0  # meters per second (used for dynamic sleep)
+        # Initial fallback position (overwritten once odometry is received)
+        self.uav_x = 0.0
+        self.uav_y = 0.0
         self.timer = self.create_timer(0.1, self.move_step)
 
         self.get_logger().info(f"Path Executor ready for {uav}")
-
-    # Hacky WARNING - dont try this at home
-    def get_starting_pad(self, uav):
-        if uav == 'x1':
-            return -3.0, -11.0
-        elif uav == 'x2':
-            return 0.0, -11.0
-        elif uav == 'x3':
-            return 3.0, -11.0
-        else:
-            return 0.0, 0.0  # fallback
 
     # Update position from odometry
     def odom_callback(self, msg):
@@ -91,20 +80,20 @@ class PathExecutor(Node):
             cmd = Twist()
 
             # Row-first lawn-mower logic: always move along X first
-            if abs(x - self.uav_x) >= 0.1:  # still need threshold check
+            if abs(dx) >= 0.2:
                 cmd.linear.x = 1.0 if x > self.uav_x else -1.0
                 cmd.linear.y = 0.0
             else:
                 # reached X, now move along Y
                 cmd.linear.x = 0.0
-                if abs(y - self.uav_y) >= 0.1:
+                if abs(dy) >= 0.2:
                     cmd.linear.y = 1.0 if y > self.uav_y else -1.0
 
             # Publish velocity
             self.cmd_pub.publish(cmd)
 
-            # Check if we've reached the waypoint (using real position now)
-            if abs(self.uav_x - x) < 0.2 and abs(self.uav_y - y) < 0.2:
+            # Check if we've reached the waypoint
+            if abs(dx) < 0.2 and abs(dy) < 0.2:
 
                 # Stop to prevent drift
                 stop = Twist()
