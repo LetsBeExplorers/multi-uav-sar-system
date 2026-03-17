@@ -30,6 +30,7 @@ class MissionManager(Node):
         # Initialize completion variables and send debug message
         self.done_uavs = set()
         self.total_uavs = 3   # match your system
+        self.mission_complete = False
         self.get_logger().debug("Mission Manager ready")
 
     # Publishes state
@@ -50,8 +51,9 @@ class MissionManager(Node):
             self.done_uavs.add(uav)
 
             # Check if all UAVs finished
-            if len(self.done_uavs) == self.total_uavs:
+            if len(self.done_uavs) == self.total_uavs and not self.mission_complete:
                 self.publish_status("[MISSION] COMPLETE")
+                self.mission_complete = True
 
     # Send start command
     def send_start(self):
@@ -62,6 +64,7 @@ class MissionManager(Node):
         # If not, set state and clear completion status
         self.state = "RUNNING"
         self.done_uavs.clear()
+        self.mission_complete = False
 
         # Send status
         self.start_pub.publish(Empty())
@@ -86,6 +89,10 @@ class MissionManager(Node):
 def main():
     rclpy.init()
     node = MissionManager()
+
+    # Start ROS spinning in background
+    spin_thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
+    spin_thread.start()
 
     print("Commands: start, stop, exit")
 
