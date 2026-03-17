@@ -63,6 +63,11 @@ class PathExecutor(Node):
         self.uav_x = msg.pose.pose.position.x
         self.uav_y = msg.pose.pose.position.y
 
+        # Capture home position once
+        if self.home_x is None:
+            self.home_x = self.uav_x
+            self.home_y = self.uav_y
+
     # Store incoming waypoints from coordinator
     def waypoint_callback(self, msg):
 
@@ -73,10 +78,6 @@ class PathExecutor(Node):
         if msg.poses:
             self.waypoints = list(msg.poses)
             self.current_index = 0
-
-            # Store first waypoint as landing pad (home)
-            self.home_x = self.waypoints[0].position.x
-            self.home_y = self.waypoints[0].position.y
 
             self.get_logger().info(f"Received {len(self.waypoints)} waypoints")
 
@@ -126,6 +127,10 @@ class PathExecutor(Node):
 
         # sends the drone home when its done
         if self.current_index >= len(self.waypoints) and self.waypoints:
+            
+            # in case we failed to set a home
+            if self.home_x is None:
+                return
 
             if not self.finished:
                 self.get_logger().info("Returning to landing pad")
