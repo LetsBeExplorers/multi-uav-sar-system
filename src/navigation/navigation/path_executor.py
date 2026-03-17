@@ -25,7 +25,7 @@ class PathExecutor(Node):
         qos = QoSProfile(
             depth=1,
             reliability=ReliabilityPolicy.RELIABLE,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL  # <-- "latched" behavior
+            durability=DurabilityPolicy.TRANSIENT_LOCAL
         )
 
         # Receives waypoint list
@@ -48,6 +48,7 @@ class PathExecutor(Node):
         self.waypoints = []
         self.current_index = 0
         self.finished = False
+        self.state = "FOLLOW"
 
         # Initial fallback position (overwritten once odometry is received)
         self.uav_x = 0.0
@@ -145,6 +146,7 @@ class PathExecutor(Node):
             self.current_index = len(self.waypoints) - 1
 
             self.finished = True
+            self.state = "RETURN"
 
 def main(args=None):
     rclpy.init(args=args)
