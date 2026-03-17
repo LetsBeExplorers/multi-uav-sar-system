@@ -17,6 +17,7 @@ class PathExecutor(Node):
         # UAV name
         self.declare_parameter('uav_name', 'x1')
         uav = self.get_parameter('uav_name').value
+        self.uav_name = uav
 
         # Publishes velocity commands
         self.cmd_pub = self.create_publisher(
@@ -49,7 +50,7 @@ class PathExecutor(Node):
         self.waypoints = []
         self.current_index = 0
         self.finished = False
-        self.state = "FOLLOW"
+        self.state = "IDLE"
 
         # Initial fallback position (overwritten once odometry is received)
         self.uav_x = 0.0
@@ -61,6 +62,20 @@ class PathExecutor(Node):
         # Debug message and status to mission manager
         self.get_logger().debug(f"Path Executor ready for {uav}")
         self.status_pub = self.create_publisher(String, '/mission/status', 10)
+
+    # Publishes node/drone status
+    def publish_status(self, text):
+        msg = String()
+        msg.data = text
+        self.status_pub.publish(msg)
+
+    # Sets the drone state and sends it to be published in the proper format
+    def set_state(self, new_state):
+        if self.state == new_state:
+            return  # prevent spam
+
+        self.state = new_state
+        self.publish_status(f"[{self.uav_name}] {self.state}")
 
     # Update position from odometry
     def odom_callback(self, msg):
@@ -83,6 +98,8 @@ class PathExecutor(Node):
             self.waypoints = list(msg.poses)
             self.current_index = 0
 
+            # Set state and send debug message
+            self.state = "EXECUTING"
             self.get_logger().info(f"Received {len(self.waypoints)} waypoints")
 
     # Move toward current waypoint using odometry feedback
@@ -129,14 +146,13 @@ class PathExecutor(Node):
                     f"Waypoint {self.current_index}: ({x:.2f}, {y:.2f})"
                 )
 
-        # sends the drone home when its done
-        if not self.finished and self.current_index >= len(self.waypoints):
+        # Trigger return-to-home ONCE
+        if self.current_index >= len(self.waypoints) and not self.finished:
 
-            # in case we failed to set a home
             if self.home_x is None:
                 return
 
-            self.get_logger().info("Returning to landing pad")
+            self.set_state("RETURNING")
 
             home_pose = Pose()
             home_pose.position.x = self.home_x
@@ -144,12 +160,14 @@ class PathExecutor(Node):
             home_pose.position.z = 1.0
 
             self.waypoints.append(home_pose)
-
-            # ensure we actually go to the new waypoint
             self.current_index = len(self.waypoints) - 1
 
             self.finished = True
-            self.state = "RETURN"
+
+
+        # Final completion AFTER returning home
+        elif self.finished and self.current_index >= len(self.waypoints):
+            self.set_state("DONE")
 
 def main(args=None):
     rclpy.init(args=args)
