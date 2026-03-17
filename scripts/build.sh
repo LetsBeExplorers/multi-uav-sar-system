@@ -76,6 +76,8 @@ for UAV in "${UAV_LIST[@]}"; do
             -r __node:=${NODE}_$UAV &
     done
 
+    sleep 2
+
     for NODE in "${OTHER_NODES[@]}"; do
         PKG=${NODE_PACKAGE[$NODE]}
 
