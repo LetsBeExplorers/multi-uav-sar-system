@@ -2,7 +2,7 @@
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String
+from std_msgs.msg import Empty, String
 import threading
 
 
@@ -12,11 +12,11 @@ class MissionManager(Node):
         super().__init__('mission_manager')
 
         # Publishers (commands)
-        self.start_pub = self.create_publisher(String, '/mission/start', 10)
-        self.stop_pub = self.create_publisher(String, '/mission/stop', 10)
+        self.start_pub = self.create_publisher(Empty, '/mission/start', 10)
+        self.stop_pub = self.create_publisher(Empty, '/mission/stop', 10)
 
         # Subscriber (status/logs)
-        self.status_sub = self.create_subscription(
+        self.create_subscription(
             String,
             '/mission/status',
             self.status_callback,
@@ -31,16 +31,12 @@ class MissionManager(Node):
 
     # Send start command
     def send_start(self):
-        msg = String()
-        msg.data = "start"
-        self.start_pub.publish(msg)
+        self.start_pub.publish(Empty())
         self.get_logger().info("START sent")
 
     # Send stop command
     def send_stop(self):
-        msg = String()
-        msg.data = "stop"
-        self.stop_pub.publish(msg)
+        self.stop_pub.publish(Empty())
         self.get_logger().info("STOP sent")
 
 
