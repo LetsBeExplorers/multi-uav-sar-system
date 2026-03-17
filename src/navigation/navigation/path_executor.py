@@ -31,7 +31,7 @@ class PathExecutor(Node):
         # Odometry subscription
         self.create_subscription(
             Odometry,
-            f'/{uav}/odom',
+            f'/{uav}/state/odom',
             self.odom_callback,
             10
         )
