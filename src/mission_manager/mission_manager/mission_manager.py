@@ -42,7 +42,7 @@ class MissionManager(Node):
     # Print incoming status messages
     def status_callback(self, msg):
         text = msg.data
-        print(text)
+        print(f"\r{text}")
 
         # Detect DONE messages
         if "DONE" in text:
