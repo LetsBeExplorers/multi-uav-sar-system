@@ -44,7 +44,7 @@ class PlatformInterface(Node):
 
         # Set starting state
         self.flight_state = "GROUNDED"
-        self.get_logger().info(f"PlatformInterface ready for UAV: {uav_name}")
+        self.get_logger().debug(f"PlatformInterface ready for UAV: {uav_name}")
 
     # ===== State Machine Based on Commanded Motion =====
     def update_flight_state(self, vertical_velocity):

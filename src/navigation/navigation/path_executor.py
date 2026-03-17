@@ -56,7 +56,7 @@ class PathExecutor(Node):
         self.home_y = None
         self.timer = self.create_timer(0.1, self.move_step)
 
-        self.get_logger().info(f"Path Executor ready for {uav}")
+        self.get_logger().debug(f"Path Executor ready for {uav}")
 
     # Update position from odometry
     def odom_callback(self, msg):

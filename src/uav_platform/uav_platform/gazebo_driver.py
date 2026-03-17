@@ -40,7 +40,7 @@ class GazeboDriver(Node):
             10
         )
 
-        self.get_logger().info(f"GazeboDriver ready for UAV: {uav_name}")
+        self.get_logger().debug(f"GazeboDriver ready for UAV: {uav_name}")
 
     def forward_command(self, msg):
         self.cmd_pub.publish(msg)
