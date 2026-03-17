@@ -126,23 +126,25 @@ class PathExecutor(Node):
                 )
 
         # sends the drone home when its done
-        if self.current_index >= len(self.waypoints) and self.waypoints:
-            
+        if not self.finished and self.current_index >= len(self.waypoints):
+
             # in case we failed to set a home
             if self.home_x is None:
                 return
 
-            if not self.finished:
-                self.get_logger().info("Returning to landing pad")
+            self.get_logger().info("Returning to landing pad")
 
-                # Add landing pad as final waypoint
-                home_pose = Pose()
-                home_pose.position.x = self.home_x
-                home_pose.position.y = self.home_y
-                home_pose.position.z = 1.0
+            home_pose = Pose()
+            home_pose.position.x = self.home_x
+            home_pose.position.y = self.home_y
+            home_pose.position.z = 1.0
 
-                self.waypoints.append(home_pose)
-                self.finished = True
+            self.waypoints.append(home_pose)
+
+            # ensure we actually go to the new waypoint
+            self.current_index = len(self.waypoints) - 1
+
+            self.finished = True
 
 def main(args=None):
     rclpy.init(args=args)
