@@ -44,14 +44,10 @@ def main():
     rclpy.init()
     node = MissionManager()
 
-    # Spin ROS in background so CLI still works
-    thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
-    thread.start()
-
     print("Commands: start, stop, exit")
 
-    while True:
-        try:
+    try:
+        while rclpy.ok():
             cmd = input(">> ").strip().lower()
 
             if cmd == "start":
@@ -66,8 +62,8 @@ def main():
             else:
                 print("Unknown command")
 
-        except KeyboardInterrupt:
-            break
+    except KeyboardInterrupt:
+        pass
 
     node.destroy_node()
     rclpy.shutdown()
