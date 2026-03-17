@@ -3,6 +3,7 @@
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist, PoseArray
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from nav_msgs.msg import Odometry
 import time
 import math
@@ -20,12 +21,19 @@ class PathExecutor(Node):
         self.cmd_pub = self.create_publisher(
             Twist, f'/{uav}/platform/cmd_vel', 10)
 
+        # QoS so we don't miss the waypoint message if it was sent before this node started
+        qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL  # <-- "latched" behavior
+        )
+
         # Receives waypoint list
         self.create_subscription(
             PoseArray,
             f'/{uav}/nav/waypoints',
             self.waypoint_callback,
-            10
+            qos
         )
 
         # Odometry subscription
@@ -54,12 +62,14 @@ class PathExecutor(Node):
 
     # Store incoming waypoints from coordinator
     def waypoint_callback(self, msg):
+
+        # Ignore if we already have waypoints (prevents restarting mission)
+        if self.waypoints:
+            return
+
         if msg.poses:
             self.waypoints = list(msg.poses)
-
-            # Reset index if we got a new list
-            if self.current_index >= len(self.waypoints):
-                self.current_index = 0
+            self.current_index = 0
 
             self.get_logger().info(f"Received {len(self.waypoints)} waypoints")
 

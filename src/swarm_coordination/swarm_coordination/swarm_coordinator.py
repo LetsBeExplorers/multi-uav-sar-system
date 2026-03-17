@@ -4,6 +4,7 @@ import time
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Pose, PoseArray
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 
 class SwarmCoordinator(Node):
     def __init__(self):
@@ -26,13 +27,22 @@ class SwarmCoordinator(Node):
 
         # Publisher for this UAV’s waypoints
         topic = f'/{self.uav_id}/nav/waypoints'
-        self.pub = self.create_publisher(PoseArray, topic, 10)
 
         self.get_logger().info(f"Coordinator ready for {self.uav_id}")
 
-        # Publish initial waypoints every 0.5s after a wait
-        time.sleep(1)
-        self.timer = self.create_timer(0.5, self.publish_waypoints)
+        # QoS profile so late subscribers still receive the last waypoint message
+        qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL
+        )
+
+        # Create publisher with QoS instead of default queue size
+        self.publisher = self.create_publisher(PoseArray, topic, qos)
+
+        # Publish waypoints once at startup
+        self.publish_waypoints()
+    
 
     def publish_waypoints(self):
         xmin, xmax, ymin, ymax = self.area
@@ -59,7 +69,7 @@ class SwarmCoordinator(Node):
                 pose.position.z = 1.0
                 poses.poses.append(pose)
 
-        self.pub.publish(poses)
+        self.publisher.publish(poses)
 
 
 def main(args=None):
