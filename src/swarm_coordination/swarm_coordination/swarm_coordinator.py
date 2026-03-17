@@ -3,7 +3,7 @@
 import time
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Empty
+from std_msgs.msg import Empty, String
 from geometry_msgs.msg import Pose, PoseArray
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 
@@ -33,7 +33,9 @@ class SwarmCoordinator(Node):
         # Publisher for this UAV’s waypoints
         topic = f'/{self.uav_id}/nav/waypoints'
 
+        # Debug message and status to mission manager
         self.get_logger().debug(f"Coordinator ready for {self.uav_id}")
+        self.status_pub = self.create_publisher(String, '/mission/status', 10)
 
         # QoS profile so late subscribers still receive the last waypoint message
         qos = QoSProfile(
@@ -44,6 +46,12 @@ class SwarmCoordinator(Node):
 
         # Create publisher with QoS instead of default queue size
         self.publisher = self.create_publisher(PoseArray, topic, qos)
+
+    # Publishes node/drone status
+    def publish_status(self, text):
+        msg = String()
+        msg.data = text
+        self.status_pub.publish(msg)
 
     # starts the callback loop when it recieves commands
     def start_cb(self, msg):

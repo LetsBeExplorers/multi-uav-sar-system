@@ -2,6 +2,7 @@
 
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import String
 from geometry_msgs.msg import Twist, PoseArray, Pose
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from nav_msgs.msg import Odometry
@@ -57,7 +58,9 @@ class PathExecutor(Node):
         self.home_y = None
         self.timer = self.create_timer(0.1, self.move_step)
 
+        # Debug message and status to mission manager
         self.get_logger().debug(f"Path Executor ready for {uav}")
+        self.status_pub = self.create_publisher(String, '/mission/status', 10)
 
     # Update position from odometry
     def odom_callback(self, msg):

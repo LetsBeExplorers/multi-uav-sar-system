@@ -1,5 +1,6 @@
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import String
 from geometry_msgs.msg import Twist
 
 # Safety & Interface Layer between Autonomy and Hardware
@@ -44,9 +45,18 @@ class PlatformInterface(Node):
 
         # Set starting state
         self.flight_state = "GROUNDED"
-        self.get_logger().debug(f"PlatformInterface ready for UAV: {uav_name}")
 
-    # ===== State Machine Based on Commanded Motion =====
+        # Debug message and status to mission manager
+        self.get_logger().debug(f"PlatformInterface ready for UAV: {uav_name}")
+        self.status_pub = self.create_publisher(String, '/mission/status', 10)
+
+    # Publishes node/drone status
+    def publish_status(self, text):
+        msg = String()
+        msg.data = text
+        self.status_pub.publish(msg)
+
+    # State Machine Based on Commanded Motion
     def update_flight_state(self, vertical_velocity):
 
         # Detect takeoff

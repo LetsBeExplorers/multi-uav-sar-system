@@ -15,6 +15,9 @@ class MissionManager(Node):
         self.start_pub = self.create_publisher(Empty, '/mission/start', 10)
         self.stop_pub = self.create_publisher(Empty, '/mission/stop', 10)
 
+        # Sends status/drone updates
+        self.status_pub = self.create_publisher(String, '/mission/status', 10)
+
         # Subscriber (status/logs)
         self.create_subscription(
             String,
@@ -23,7 +26,13 @@ class MissionManager(Node):
             10
         )
 
-        self.get_logger().info("Mission Manager ready")
+        self.get_logger().debug("Mission Manager ready")
+
+    # Publishes state
+    def publish_status(self, text):
+        msg = String()
+        msg.data = text
+        self.status_pub.publish(msg)
 
     # Print incoming status messages
     def status_callback(self, msg):
