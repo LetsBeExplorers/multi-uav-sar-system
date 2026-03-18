@@ -229,5 +229,109 @@
       </link>
     </model>
 
+    <!-- ===== OBSTACLES ===== -->
+
+    <model name="obs_1">
+      <static>true</static>
+      <pose>2 3 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>1 1 2</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>1 1 2</size></box></geometry>
+          <material>
+            <ambient>0.2 0.2 0.2 1</ambient>
+            <diffuse>0.2 0.2 0.2 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="obs_2">
+      <static>true</static>
+      <pose>2 4 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>1 1 2</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>1 1 2</size></box></geometry>
+          <material>
+            <ambient>0.2 0.2 0.2 1</ambient>
+            <diffuse>0.2 0.2 0.2 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="obs_3">
+      <static>true</static>
+      <pose>2 5 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>1 1 2</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>1 1 2</size></box></geometry>
+          <material>
+            <ambient>0.2 0.2 0.2 1</ambient>
+            <diffuse>0.2 0.2 0.2 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="obs_4">
+      <static>true</static>
+      <pose>5 5 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>1 1 2</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>1 1 2</size></box></geometry>
+          <material>
+            <ambient>0.2 0.2 0.2 1</ambient>
+            <diffuse>0.2 0.2 0.2 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="obs_5">
+      <static>true</static>
+      <pose>6 5 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>1 1 2</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>1 1 2</size></box></geometry>
+          <material>
+            <ambient>0.2 0.2 0.2 1</ambient>
+            <diffuse>0.2 0.2 0.2 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="obs_6">
+      <static>true</static>
+      <pose>5 6 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>1 1 2</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>1 1 2</size></box></geometry>
+          <material>
+            <ambient>0.2 0.2 0.2 1</ambient>
+            <diffuse>0.2 0.2 0.2 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
   </world>
 </sdf>
