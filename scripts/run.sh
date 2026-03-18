@@ -12,10 +12,8 @@ source install/setup.bash
 
 echo "Starting UAV system..."
 
-# Start launch in background AND track it
+# Start launch in background
 ros2 launch sar_system system.launch.py &
-LAUNCH_PID=$!
-
 sleep 2
 
 echo "Starting Mission Manager..."
@@ -26,6 +24,6 @@ ros2 run mission_manager mission_manager
 # When MissionManager exits → clean shutdown
 echo "Shutting down system..."
 
-kill $LAUNCH_PID
-pkill -f ros2
+pkill -f multi-uav-sar-system > /dev/null 2>&1
+pkill -f ros2 > /dev/null 2>&1
 sleep 1
