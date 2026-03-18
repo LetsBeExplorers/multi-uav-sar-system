@@ -25,6 +25,7 @@ class SwarmCoordinator(Node):
         # listeners for mission management
         self.state = "IDLE"
         self.create_subscription(Empty, '/mission/start', self.start_cb, 10)
+        self.create_subscription(Empty, '/mission/stop', self.stop_cb, 10)
 
         # Map UAV ID to index for slice assignment
         uav_ids = [f"x{i+1}" for i in range(self.num_uavs)]
@@ -73,6 +74,10 @@ class SwarmCoordinator(Node):
 
         # Generate and send waypoints
         self.publish_waypoints()
+
+    # Stops the callback loop
+    def stop_cb(self, msg):
+        self.set_state("IDLE")
 
     # Defines the search area and sends the waypoints to navigation
     def publish_waypoints(self):
