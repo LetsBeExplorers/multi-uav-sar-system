@@ -59,9 +59,10 @@ class PathExecutor(Node):
         self.home_y = None
         self.timer = self.create_timer(0.1, self.move_step)
 
-        # Debug message and status to mission manager
+        # Debug message and status to/from mission manager
         self.get_logger().debug(f"Path Executor ready for {uav}")
         self.status_pub = self.create_publisher(String, '/mission/status', 10)
+        self.create_subscription(Empty, '/mission/stop', self.stop_cb, 10)
 
     # Publishes node/drone status
     def publish_status(self, text):
@@ -77,6 +78,17 @@ class PathExecutor(Node):
         self.state = new_state
         self.publish_status(f"[{self.uav_name}] {self.state}")
 
+    # Emergency stop
+    def stop_cb(self, msg):
+        self.waypoints = []
+        self.current_index = 0
+        self.finished = False
+
+        stop = Twist()
+        self.cmd_pub.publish(stop)
+
+        self.set_state("IDLE")
+
     # Update position from odometry
     def odom_callback(self, msg):
         self.uav_x = msg.pose.pose.position.x
@@ -90,8 +102,8 @@ class PathExecutor(Node):
     # Store incoming waypoints from coordinator
     def waypoint_callback(self, msg):
 
-        # Ignore if we already have waypoints (prevents restarting mission)
-        if self.waypoints:
+        # Ignore if currently running a mission
+        if self.state == "EXECUTING":
             return
 
         if msg.poses:
