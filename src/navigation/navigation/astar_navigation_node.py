@@ -30,8 +30,8 @@ class AStarNavigationNode(Node):
         )
 
         # Grid dimensions
-        self.width = 10
-        self.height = 10
+        self.width = 21
+        self.height = 21
         self.grid = [[0 for _ in range(self.width)] for _ in range(self.height)]
 
         # Initial static obstacles
@@ -42,10 +42,11 @@ class AStarNavigationNode(Node):
         ]
 
         for x, y in self.obstacles:
-            self.grid[y][x] = 1
+            gx, gy = self.world_to_grid(x, y)
+            self.grid[gy][gx] = 1
 
         # Current UAV position
-        self.current_position: GridCell = (0, 0)
+        self.current_position = self.world_to_grid(-10, -10)
 
         # Waypoints received from topic
         self.waypoints: List[GridCell] = []
@@ -61,13 +62,18 @@ class AStarNavigationNode(Node):
         self.get_logger().info(f'Listening for waypoints on: {waypoint_topic}')
         self.get_logger().info(f'Publishing planned path on: {path_topic}')
 
+    def world_to_grid(self, x, y):
+        return (x + 10, y + 10)
+
     def waypoint_callback(self, msg: PoseArray):
         self.waypoints = []
 
         for pose in msg.poses:
-            x = int(round(pose.position.x))
-            y = int(round(pose.position.y))
-            self.waypoints.append((x, y))
+            wx = int(round(pose.position.x))
+            wy = int(round(pose.position.y))
+
+            gx, gy = self.world_to_grid(wx, wy)
+            self.waypoints.append((gx, gy))
 
         self.current_waypoint_index = 0
         self.received_waypoints = True
@@ -144,8 +150,8 @@ class AStarNavigationNode(Node):
         for x, y in cells:
             pose = PoseStamped()
             pose.header = path_msg.header
-            pose.pose.position.x = float(x)
-            pose.pose.position.y = float(y)
+            pose.pose.position.x = float(x - 10)
+            pose.pose.position.y = float(y - 10)
             pose.pose.position.z = 0.0
             pose.pose.orientation.w = 1.0
             path_msg.poses.append(pose)
