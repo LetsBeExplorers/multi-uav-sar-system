@@ -3,9 +3,9 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String, Empty
-from geometry_msgs.msg import Twist, PoseArray, Pose
+from geometry_msgs.msg import Twist, Pose
+from nav_msgs.msg import Odometry, Path
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
-from nav_msgs.msg import Odometry
 import time
 import math
 
@@ -32,8 +32,8 @@ class PathExecutor(Node):
 
         # Receives waypoint list
         self.create_subscription(
-            PoseArray,
-            f'/{uav}/nav/waypoints',
+            Path,
+            f'/{uav}/nav/planned_path',
             self.waypoint_callback,
             qos
         )
@@ -107,7 +107,7 @@ class PathExecutor(Node):
             return
 
         if msg.poses:
-            self.waypoints = list(msg.poses)
+            self.waypoints = [pose.pose for pose in msg.poses]
             self.current_index = 0
 
             # Set state and send debug message
