@@ -233,7 +233,7 @@
 
     <model name="obs_1">
       <static>true</static>
-      <pose>2 3 0.5 0 0 0</pose>
+      <pose>-6 1 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><box><size>1 1 2</size></box></geometry>
@@ -250,7 +250,7 @@
 
     <model name="obs_2">
       <static>true</static>
-      <pose>2 4 0.5 0 0 0</pose>
+      <pose>-6 3 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><box><size>1 1 2</size></box></geometry>
@@ -267,7 +267,7 @@
 
     <model name="obs_3">
       <static>true</static>
-      <pose>2 5 0.5 0 0 0</pose>
+      <pose>0 3 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><box><size>1 1 2</size></box></geometry>
@@ -284,7 +284,7 @@
 
     <model name="obs_4">
       <static>true</static>
-      <pose>5 5 0.5 0 0 0</pose>
+      <pose>0 5 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><box><size>1 1 2</size></box></geometry>
@@ -318,7 +318,7 @@
 
     <model name="obs_6">
       <static>true</static>
-      <pose>5 6 0.5 0 0 0</pose>
+      <pose>6 7 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry><box><size>1 1 2</size></box></geometry>
