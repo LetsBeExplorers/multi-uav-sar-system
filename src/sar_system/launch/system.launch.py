@@ -56,6 +56,19 @@ def generate_launch_description():
             )
         )
 
+        # A* navigation (obstacle-aware planning)
+        nodes.append(
+            Node(
+                package='navigation',
+                executable='astar_navigation_node',
+                name='astar_navigation_' + uav,
+                parameters=[
+                    {'waypoint_topic': f'/{uav}/nav/waypoints'},
+                    {'path_topic': f'/{uav}/nav/planned_path'}
+                ]
+            )
+        )
+
     # Mission manager (user interface)
     nodes.append(
         Node(
