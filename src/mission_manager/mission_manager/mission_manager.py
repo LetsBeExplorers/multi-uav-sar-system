@@ -4,6 +4,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Empty, String
 import threading
+from rclpy.executors import ExternalShutdownException
 
 
 class MissionManager(Node):
@@ -86,13 +87,19 @@ class MissionManager(Node):
         self.publish_status("[MISSION] STOPPED")
         self.get_logger().debug("STOP sent")
 
+# Background spin thread with exception handling to prevent shutdown errors
+def safe_spin(node):
+    try:
+        rclpy.spin(node)
+    except ExternalShutdownException:
+        pass
 
 def main():
     rclpy.init()
     node = MissionManager()
 
     # Start ROS spinning in background
-    spin_thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
+    spin_thread = threading.Thread(target=safe_spin, args=(node,), daemon=True)
     spin_thread.start()
 
     print("Commands: start, stop, exit")
