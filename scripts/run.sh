@@ -11,7 +11,7 @@ source install/setup.bash
 echo "Starting UAV system..."
 
 # Launch all non-interactive nodes
-ros2 launch sar_system system.launch.py &
+ros2 launch sar_system system.launch.py
 
 # Give system time to start
 sleep 2
