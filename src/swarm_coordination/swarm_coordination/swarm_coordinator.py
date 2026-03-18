@@ -42,7 +42,7 @@ class SwarmCoordinator(Node):
         qos = QoSProfile(
             depth=1,
             reliability=ReliabilityPolicy.RELIABLE,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL
+            durability=DurabilityPolicy.VOLATILE
         )
 
         # Create publisher with QoS instead of default queue size

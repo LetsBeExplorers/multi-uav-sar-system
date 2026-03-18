@@ -27,7 +27,7 @@ class PathExecutor(Node):
         qos = QoSProfile(
             depth=1,
             reliability=ReliabilityPolicy.RELIABLE,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL
+            durability=DurabilityPolicy.VOLATILE
         )
 
         # Receives waypoint list

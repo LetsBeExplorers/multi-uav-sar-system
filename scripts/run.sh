@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Shut down the zombies
+pkill -f ros2
+sleep 1
+
 # Source environment
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
