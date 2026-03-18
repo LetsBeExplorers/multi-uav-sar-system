@@ -54,8 +54,8 @@ class MissionManager(Node):
 
             # Check if all UAVs finished
             if len(self.done_uavs) == self.total_uavs and not self.mission_complete:
-                self.publish_status("[MISSION] COMPLETE")
                 self.mission_complete = True
+                self.publish_status("[MISSION] COMPLETE")
 
     # Send start command
     def send_start(self):
