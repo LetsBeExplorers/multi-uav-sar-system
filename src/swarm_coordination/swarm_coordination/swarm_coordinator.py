@@ -75,9 +75,9 @@ class SwarmCoordinator(Node):
         # Generate and send waypoints
         self.publish_waypoints()
 
-    # Stops the callback loop
+    # Sets state when emergency stop is initiated
     def stop_cb(self, msg):
-        self.set_state("IDLE")
+        self.state = "IDLE"
 
     # Defines the search area and sends the waypoints to navigation
     def publish_waypoints(self):
