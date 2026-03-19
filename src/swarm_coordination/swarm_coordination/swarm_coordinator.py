@@ -217,12 +217,9 @@ class SwarmCoordinator(Node):
 
         # Stop Logging if reaches 100% coverage
         if coverage >= 0.9999:
-            self.set_state("DONE")
-            
             if self.timer is not None:
                 self.destroy_timer(self.timer)
                 self.timer = None
-
             return
 
         with open(self.results_file, "a") as f:
