@@ -3,7 +3,7 @@
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String, Empty
-from geometry_msgs.msg import Twist, Pose
+from geometry_msgs.msg import Twist, Pose, PoseArray
 from nav_msgs.msg import Odometry, Path
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 import time
@@ -43,6 +43,12 @@ class PathExecutor(Node):
             f'/{uav}/state/odom',
             self.odom_callback,
             10
+        )
+
+        self.waypoint_pub = self.create_publisher(
+            PoseArray,
+            f'/{self.uav_name}/nav/waypoints',
+            qos
         )
 
         # Internal state
@@ -121,6 +127,12 @@ class PathExecutor(Node):
         home_pose.position.x = self.home_x
         home_pose.position.y = self.home_y
 
+        # DEBUG: send to A* but DO NOT use it yet
+        msg = PoseArray()
+        msg.poses.append(home_pose)
+        self.waypoint_pub.publish(msg)
+
+        # Keep old behavior for now
         self.waypoints = [home_pose]
         self.current_index = 0
 
@@ -171,6 +183,7 @@ class PathExecutor(Node):
 
                 # Otherwise, mission done → go home
                 self.publish_status(f"[{self.uav_name}] DONE")
+                self.latest_path_msg = None
                 self.go_home()
                 return
 
