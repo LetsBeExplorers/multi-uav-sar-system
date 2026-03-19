@@ -69,7 +69,6 @@ class AStarNavigationNode(Node):
 
         # Track planning cycles
         self.has_active_plan = False
-        self.timer = self.create_timer(0.5, self.plan_and_advance)
 
     # Just grabs position of drone
     def odom_callback(self, msg):
@@ -86,6 +85,8 @@ class AStarNavigationNode(Node):
             self.current_waypoint_index += 1
             self.has_active_plan = False
 
+            self.plan_and_advance()
+
     def world_to_grid(self, x, y):
         return (x + 10, y + 10)
 
@@ -101,6 +102,7 @@ class AStarNavigationNode(Node):
         self.current_waypoint_index = 0
         self.has_active_plan = False
 
+        self.plan_and_advance()
         self.get_logger().info(f'Received waypoints: {self.waypoints}')
 
     def heuristic(self, a: GridCell, b: GridCell) -> int:
