@@ -51,7 +51,7 @@ def generate_launch_description():
                     {'uav_id': uav},
                     {'num_uavs': 3},
                     {'area_bounds': [-10, 10, -10, 10]},
-                    {'rows': 3}
+                    {'rows': 5}
                 ]
             )
         )
