@@ -200,34 +200,32 @@ class AStarNavigationNode(Node):
             self.get_logger().info('All waypoints completed')
             return
 
-        goal = self.waypoints[self.current_waypoint_index]
-        self.plan_cycle += 1
-
 #        if self.plan_cycle == 2:
 #            self.add_dynamic_obstacle()
 
+        goal = self.waypoints[self.current_waypoint_index]
+
+        if self.reached_goal(goal):
+            self.get_logger().info(f'Reached waypoint {goal}')
+
+            self.current_waypoint_index += 1
+
+            if self.current_waypoint_index >= len(self.waypoints):
+                self.get_logger().info('Mission complete')
+                return
+
+            goal = self.waypoints[self.current_waypoint_index]
+            self.get_logger().info(f'Next waypoint: {goal}')
+
+        # Always plan toward CURRENT goal
         path = self.astar(self.current_position, goal)
 
         if path is None:
             self.get_logger().warn(f'No valid path found to waypoint {goal}')
             return
 
-        self.get_logger().info(
-            f'Planning from {self.current_position} to waypoint {goal}: {path}'
-        )
-
         path_msg = self.build_path_msg(path)
         self.path_pub.publish(path_msg)
-
-        if self.reached_goal(goal):
-            self.current_waypoint_index += 1
-
-        if self.current_waypoint_index < len(self.waypoints):
-            self.get_logger().info(
-                f'Moving on to next waypoint: {self.waypoints[self.current_waypoint_index]}'
-            )
-        else:
-            self.get_logger().info('Mission complete')
 
 
 def main(args=None):
