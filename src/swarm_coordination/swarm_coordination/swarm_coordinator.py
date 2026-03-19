@@ -104,7 +104,7 @@ class SwarmCoordinator(Node):
     def init_logging(self):
         self.timer = None
         self.run_id = int(time.time())
-        self.results_file = f"{self.uav_id}_coordination-results.csv"
+        self.results_file = f"results/{self.uav_id}_coordination-results.csv"
 
         # Add header to results file
         if not os.path.exists(self.results_file):
