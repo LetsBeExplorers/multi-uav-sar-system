@@ -15,7 +15,7 @@ def generate_lawnmower_waypoints(xmin, xmax, ymin, ymax, rows, x_start, x_end):
     poses = []
 
     height = ymax - ymin
-    row_height = height / (rows - 1)
+    row_height = height / max(rows - 1, 1)
 
     for row in range(rows):
         y = ymin + row * row_height
@@ -71,7 +71,7 @@ class SwarmCoordinator(Node):
 
     def init_uav_mapping(self):
         uav_ids = [f"x{i+1}" for i in range(self.num_uavs)]
-        self.uav_index = uav_ids.index(str(self.uav_id))
+        self.uav_index = uav_ids.index(self.uav_id)
 
     def init_ros_interfaces(self):
         # Mission control
@@ -102,11 +102,11 @@ class SwarmCoordinator(Node):
         self.get_logger().debug(f"Coordinator ready for {self.uav_id}")
 
     def init_logging(self):
+        self.timer = None
         self.run_id = int(time.time())
         self.results_file = f"{self.uav_id}_coordination-results.csv"
 
-        self.timer = self.create_timer(2.0, self.log_metrics)
-
+        # Add header to resutls file
         if not os.path.exists(self.results_file):
             with open(self.results_file, "w") as f:
                 f.write("run_id,timestamp,elapsed,state,num_waypoints,x_start,x_end,coverage\n")
@@ -125,7 +125,13 @@ class SwarmCoordinator(Node):
         self.visited_waypoints = 0
         self.start_time = time.time()
 
-        # Update state and send debug message        
+        # Restart timer cleanly
+        if self.timer is not None:
+            self.destroy_timer(self.timer)
+
+        self.timer = self.create_timer(2.0, self.log_metrics)
+
+        # Update state
         self.set_state("SEARCHING")
         self.get_logger().debug("Mission START → publishing waypoints")
 
@@ -135,6 +141,11 @@ class SwarmCoordinator(Node):
     # Sets state when emergency stop is initiated
     def stop_cb(self, msg):
         self.state = "IDLE"
+
+        # Stop logging timer
+        if self.timer is not None:
+            self.destroy_timer(self.timer)
+            self.timer = None
 
     # Measures # of waypoints reached
     def wp_cb(self, msg):
