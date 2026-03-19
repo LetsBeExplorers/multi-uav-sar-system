@@ -134,7 +134,7 @@ class PathExecutor(Node):
         msg = PoseArray()
         pose = Pose()
         pose.position.x = self.home_x
-        pose.position.y = self.home_y
+        pose.position.y = self.home_y + 1.0
         msg.poses.append(pose)
 
         self.get_logger().debug(f"GO_HOME publish: ({self.home_x}, {self.home_y})")
