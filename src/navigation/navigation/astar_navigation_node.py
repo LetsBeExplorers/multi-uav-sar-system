@@ -222,9 +222,7 @@ class AStarNavigationNode(Node):
         if path is None:
             self.get_logger().warn(f'No valid path to {goal}')
             return
-
-        self.get_logger().info(f"Planning from {start} → {goal}")
-        self.get_logger().info(f"Path length: {len(path)}")
+            
         self.path_pub.publish(self.build_path_msg(path))
 
     def plan_and_advance(self):
