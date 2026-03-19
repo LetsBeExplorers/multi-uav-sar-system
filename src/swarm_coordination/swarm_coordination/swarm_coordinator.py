@@ -39,8 +39,17 @@ class SwarmCoordinator(Node):
         # ==============================
 
         super().__init__('swarm_coordinator')
+        self.init_parameters()
+        self.init_state()
+        self.init_uav_mapping()
+        self.init_ros_interfaces()
+        self.init_logging()
 
-        # Parameters
+    # ==============================
+    # Initialization Helpers
+    # ==============================
+
+    def init_parameters(self):
         self.declare_parameter('uav_id', 'x1')
         self.declare_parameter('num_uavs', 3)
         self.declare_parameter('area_bounds', [-10,10,-10,10])
