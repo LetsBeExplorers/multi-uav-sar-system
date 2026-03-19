@@ -60,30 +60,25 @@ class SwarmCoordinator(Node):
         self.area = self.get_parameter('area_bounds').value
         self.rows = self.get_parameter('rows').value
 
-        # listeners for mission management
+    def init_state(self):
         self.state = "IDLE"
+
+        self.visited_waypoints = 0
+        self.num_waypoints = 0
+        self.x_start = 0.0
+        self.x_end = 0.0
+        self.start_time = None
+
+    def init_uav_mapping(self):
+        uav_ids = [f"x{i+1}" for i in range(self.num_uavs)]
+        self.uav_index = uav_ids.index(str(self.uav_id))
+
+    def init_ros_interfaces(self):
+        # Mission control
         self.create_subscription(Empty, '/mission/start', self.start_cb, 10)
         self.create_subscription(Empty, '/mission/stop', self.stop_cb, 10)
 
-        # Map UAV ID to index for slice assignment
-        uav_ids = [f"x{i+1}" for i in range(self.num_uavs)]
-        self.uav_index = uav_ids.index(str(self.uav_id))  # ensure it's a string
-
-        # Publisher for this UAV’s waypoints
-        topic = f'/{self.uav_id}/nav/waypoints'
-
-        # Debug message and status to mission manager
-        self.get_logger().debug(f"Coordinator ready for {self.uav_id}")
-        self.status_pub = self.create_publisher(String, '/mission/status', 10)
-
-        # QoS profile so late subscribers still receive the last waypoint message
-        qos = QoSProfile(
-            depth=1,
-            reliability=ReliabilityPolicy.RELIABLE,
-            durability=DurabilityPolicy.VOLATILE
-        )
-
-        # Subscriber to know when waypoints are reached
+        # Waypoint feedback
         self.create_subscription(
             Empty,
             f'/{self.uav_id}/nav/reached_waypoint',
@@ -91,22 +86,27 @@ class SwarmCoordinator(Node):
             10
         )
 
-        # Create publisher with QoS instead of default queue size
+        # Status publisher
+        self.status_pub = self.create_publisher(String, '/mission/status', 10)
+
+        # Waypoint publisher
+        qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE
+        )
+
+        topic = f'/{self.uav_id}/nav/waypoints'
         self.publisher = self.create_publisher(PoseArray, topic, qos)
 
-        # Metrics for logging
-        self.visited_waypoints = 0
-        self.num_waypoints = 0
-        self.x_start = 0.0
-        self.x_end = 0.0
-        self.start_time = None
+        self.get_logger().debug(f"Coordinator ready for {self.uav_id}")
 
-        # For logging/testing
+    def init_logging(self):
         self.run_id = int(time.time())
         self.results_file = f"{self.uav_id}_coordination-results.csv"
+
         self.timer = self.create_timer(2.0, self.log_metrics)
 
-        # Only create header if file does NOT exist
         if not os.path.exists(self.results_file):
             with open(self.results_file, "w") as f:
                 f.write("run_id,timestamp,elapsed,state,num_waypoints,x_start,x_end,coverage\n")
