@@ -106,7 +106,7 @@ class SwarmCoordinator(Node):
         self.run_id = int(time.time())
         self.results_file = f"{self.uav_id}_coordination-results.csv"
 
-        # Add header to resutls file
+        # Add header to results file
         if not os.path.exists(self.results_file):
             with open(self.results_file, "w") as f:
                 f.write("run_id,timestamp,elapsed,state,num_waypoints,x_start,x_end,coverage\n")
@@ -124,6 +124,7 @@ class SwarmCoordinator(Node):
         # Reset metrics
         self.visited_waypoints = 0
         self.start_time = time.time()
+        self.run_id = int(time.time())
 
         # Restart timer cleanly
         if self.timer is not None:
