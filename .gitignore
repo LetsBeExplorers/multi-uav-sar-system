@@ -222,3 +222,6 @@ __marimo__/
 build/
 install/
 log/
+
+# Results
+*results.csv
