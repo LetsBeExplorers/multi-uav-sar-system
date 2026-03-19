@@ -68,12 +68,4 @@ def generate_launch_description():
             )
         )
 
-    # Mission manager (user interface)
-    nodes.append(
-        Node(
-            package='mission_manager',
-            executable='mission_manager'
-        )
-    )
-
     return LaunchDescription(nodes)
