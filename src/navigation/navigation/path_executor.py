@@ -165,23 +165,8 @@ class PathExecutor(Node):
                 self.just_reached = False
 
         # Trigger return-to-home ONCE
-        if self.current_index >= len(self.waypoints) and not self.finished:
-
-            if self.home_x is None:
-                return
-
-            self.set_state("RETURNING")
-
-            home_pose = Pose()
-            home_pose.position.x = self.home_x
-            home_pose.position.y = self.home_y
-            home_pose.position.z = 1.0
-
-            self.waypoints.append(home_pose)
-            self.current_index = len(self.waypoints) - 1
-
-            self.finished = True
-
+        if self.current_index >= len(self.waypoints):
+            return
 
         # Final completion AFTER returning home
         elif self.finished and self.current_index >= len(self.waypoints):
@@ -192,7 +177,6 @@ def main(args=None):
     node = PathExecutor()
     rclpy.spin(node)
     rclpy.shutdown()
-
 
 if __name__ == '__main__':
     main()
