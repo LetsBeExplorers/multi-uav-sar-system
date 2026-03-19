@@ -9,8 +9,35 @@ from geometry_msgs.msg import Pose, PoseArray
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from datetime import datetime
 
+
+# Generates waypoints in coverage pattern
+def generate_lawnmower_waypoints(xmin, xmax, ymin, ymax, rows, x_start, x_end):
+    poses = []
+
+    height = ymax - ymin
+    row_height = height / (rows - 1)
+
+    for row in range(rows):
+        y = ymin + row * row_height
+        x_positions = [x_start, x_end] if row % 2 == 0 else [x_end, x_start]
+
+        for x in x_positions:
+            pose = Pose()
+            pose.position.x = x
+            pose.position.y = y
+            pose.position.z = 1.0
+            poses.append(pose)
+
+    return poses
+
+
 class SwarmCoordinator(Node):
     def __init__(self):
+
+        # ==============================
+        # Initialization
+        # ==============================
+
         super().__init__('swarm_coordinator')
 
         # Parameters
@@ -58,10 +85,15 @@ class SwarmCoordinator(Node):
         # Create publisher with QoS instead of default queue size
         self.publisher = self.create_publisher(PoseArray, topic, qos)
 
-        # For logging/testing
-        self.start_time = None
-        self.run_id = int(time.time())
+        # Metrics for logging
         self.visited_waypoints = 0
+        self.num_waypoints = 0
+        self.x_start = 0.0
+        self.x_end = 0.0
+        self.start_time = None
+
+        # For logging/testing
+        self.run_id = int(time.time())
         self.results_file = f"{self.uav_id}_coordination-results.csv"
         self.timer = self.create_timer(2.0, self.log_metrics)
 
@@ -70,47 +102,9 @@ class SwarmCoordinator(Node):
             with open(self.results_file, "w") as f:
                 f.write("run_id,timestamp,elapsed,state,num_waypoints,x_start,x_end,coverage\n")
 
-    # Measures # of waypoints reached
-    def wp_cb(self, msg):
-        self.visited_waypoints += 1
-
-    # Logs data
-    def log_metrics(self):
-        if self.start_time is None:
-            return
-
-        # Make sure waypoints exist first
-        if not hasattr(self, "num_waypoints"):
-            return
-
-        # How long the run took
-        elapsed = time.time() - self.start_time
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        # Measures coverage
-        coverage = (
-            min(self.visited_waypoints / self.num_waypoints, 1.0)
-            if self.num_waypoints > 0 else 0.0
-        )
-
-        with open(self.results_file, "a") as f:
-            f.write(
-                f"{self.run_id},{timestamp},{elapsed:.2f},{self.state},{self.num_waypoints},{self.x_start},{self.x_end},{coverage:.2f}\n"
-            )
-
-    # Publishes node/drone status
-    def publish_status(self, text):
-        msg = String()
-        msg.data = text
-        self.status_pub.publish(msg)
-
-    # Sets the drone state and sends it to be published in the proper format
-    def set_state(self, new_state):
-        if self.state == new_state:
-            return  # prevent spam
-
-        self.state = new_state
-        self.publish_status(f"[{self.uav_id}] {self.state}")
+    # ==============================
+    # Callbacks
+    # ==============================
 
     # Starts the callback loop when it recieves commands
     def start_cb(self, msg):
@@ -133,41 +127,77 @@ class SwarmCoordinator(Node):
     def stop_cb(self, msg):
         self.state = "IDLE"
 
+    # Measures # of waypoints reached
+    def wp_cb(self, msg):
+        self.visited_waypoints += 1
+
+    # ==============================
+    # Core Logic
+    # ==============================
+
     # Defines the search area and sends the waypoints to navigation
     def publish_waypoints(self):
         xmin, xmax, ymin, ymax = self.area
-        width = xmax - xmin
-        height = ymax - ymin
-        row_height = height / (self.rows - 1)
 
-        # Slice for this UAV
-        slice_width = width / self.num_uavs
-        x_start = xmin + self.uav_index * slice_width
-        x_end = xmin + (self.uav_index + 1) * slice_width
-        self.x_start = x_start
-        self.x_end = x_end
+        slice_width = (xmax - xmin) / self.num_uavs
 
-        self.get_logger().debug(
-            f"[{self.uav_id}] Assigned region: x=({x_start:.2f},{x_end:.2f})"
+        self.x_start = xmin + self.uav_index * slice_width
+        self.x_end = xmin + (self.uav_index + 1) * slice_width
+
+        poses = generate_lawnmower_waypoints(
+            xmin, xmax, ymin, ymax,
+            self.rows,
+            self.x_start, self.x_end
         )
 
-        poses = PoseArray()
-        poses.header.frame_id = 'world'
+        msg = PoseArray()
+        msg.header.frame_id = 'world'
+        msg.poses = poses
 
-        # Lawn-mower pattern
-        for row in range(self.rows):
-            y = ymin + row * row_height
-            x_positions = [x_start, x_end] if row % 2 == 0 else [x_end, x_start]
-            for x in x_positions:
-                pose = Pose()
-                pose.position.x = x
-                pose.position.y = y
-                pose.position.z = 1.0
-                poses.poses.append(pose)
+        self.num_waypoints = len(poses)
+        self.publisher.publish(msg)
 
-        self.num_waypoints = len(poses.poses)
-        self.publisher.publish(poses)
+    # ==============================
+    # State / Messaging Helpers
+    # ==============================
 
+    # Publishes node/drone status
+    def publish_status(self, text):
+        msg = String()
+        msg.data = text
+        self.status_pub.publish(msg)
+
+    # Sets the drone state and sends it to be published in the proper format
+    def set_state(self, new_state):
+        if self.state == new_state:
+            return  # prevent spam
+
+        self.state = new_state
+        self.publish_status(f"[{self.uav_id}] {self.state}")
+
+    # ==============================
+    # Logging / Metrics
+    # ==============================
+
+    # Logs data
+    def log_metrics(self):
+        if self.start_time is None:
+            return
+
+        # How long the run took
+        elapsed = time.time() - self.start_time
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Measures coverage
+        coverage = (
+            min(self.visited_waypoints / self.num_waypoints, 1.0)
+            if self.num_waypoints > 0 else 0.0
+        )
+
+        with open(self.results_file, "a") as f:
+            f.write(
+                f"{self.run_id},{timestamp},{elapsed:.2f},{self.state},{self.num_waypoints},{self.x_start},{self.x_end},{coverage:.2f}\n"
+            )
 
 def main(args=None):
     rclpy.init(args=args)
