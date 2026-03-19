@@ -19,9 +19,9 @@ class PathExecutor(Node):
         uav = self.get_parameter('uav_name').value
         self.uav_name = uav
 
-        # Publishes velocity commands
-        self.cmd_pub = self.create_publisher(
-            Twist, f'/{uav}/platform/cmd_vel', 10)
+        # Publishers
+        self.cmd_pub = self.create_publisher(Twist, f'/{uav}/platform/cmd_vel', 10)
+        self.wp_pub = self.create_publisher(Empty, f'/{self.uav_id}/nav/reached_waypoint', 10)
 
         # QoS so we don't miss the waypoint message if it was sent before this node started
         qos = QoSProfile(
@@ -154,6 +154,8 @@ class PathExecutor(Node):
                 self.current_index += 1
 
                 # Log the waypoint
+                msg = Empty()
+                self.wp_pub.publish(msg)
                 self.get_logger().debug(
                     f"Waypoint {self.current_index}: ({x:.2f}, {y:.2f})"
                 )

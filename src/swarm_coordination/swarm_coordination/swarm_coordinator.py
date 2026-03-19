@@ -2,10 +2,12 @@
 
 import time
 import rclpy
+import os
 from rclpy.node import Node
 from std_msgs.msg import Empty, String
 from geometry_msgs.msg import Pose, PoseArray
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
+from datetime import datetime
 
 class SwarmCoordinator(Node):
     def __init__(self):
@@ -45,8 +47,56 @@ class SwarmCoordinator(Node):
             durability=DurabilityPolicy.VOLATILE
         )
 
+        # Subscriber to know when waypoints are reached
+        self.create_subscription(
+            Empty,
+            f'/{self.uav_id}/nav/reached_waypoint',
+            self.wp_cb,
+            10
+        )
+
         # Create publisher with QoS instead of default queue size
         self.publisher = self.create_publisher(PoseArray, topic, qos)
+
+        # For logging/testing
+        self.start_time = None
+        self.run_id = int(time.time())
+        self.visited_waypoints = 0
+        self.results_file = f"{self.uav_id}_coordination-results.csv"
+        self.timer = self.create_timer(2.0, self.log_metrics)
+
+        # Only create header if file does NOT exist
+        if not os.path.exists(self.results_file):
+            with open(self.results_file, "w") as f:
+                f.write("run_id,timestamp,elapsed,state,num_waypoints,x_start,x_end,coverage\n")
+
+    # Measures # of waypoints reached
+    def wp_cb(self, msg):
+        self.visited_waypoints += 1
+
+    # Logs data
+    def log_metrics(self):
+        if self.start_time is None:
+            return
+
+        # Make sure waypoints exist first
+        if not hasattr(self, "num_waypoints"):
+            return
+
+        # How long the run took
+        elapsed = time.time() - self.start_time
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Measures coverage
+        coverage = (
+            min(self.visited_waypoints / self.num_waypoints, 1.0)
+            if self.num_waypoints > 0 else 0.0
+        )
+
+        with open(self.results_file, "a") as f:
+            f.write(
+                f"{self.run_id},{timestamp},{elapsed:.2f},{self.state},{self.num_waypoints},{self.x_start},{self.x_end},{coverage:.2f}\n"
+            )
 
     # Publishes node/drone status
     def publish_status(self, text):
@@ -68,7 +118,11 @@ class SwarmCoordinator(Node):
         if self.state != "IDLE":
             return
 
-        # Update state and send debug message
+        # Reset metrics
+        self.visited_waypoints = 0
+        self.start_time = time.time()
+
+        # Update state and send debug message        
         self.set_state("SEARCHING")
         self.get_logger().debug("Mission START → publishing waypoints")
 
@@ -90,6 +144,12 @@ class SwarmCoordinator(Node):
         slice_width = width / self.num_uavs
         x_start = xmin + self.uav_index * slice_width
         x_end = xmin + (self.uav_index + 1) * slice_width
+        self.x_start = x_start
+        self.x_end = x_end
+
+        self.get_logger().debug(
+            f"[{self.uav_id}] Assigned region: x=({x_start:.2f},{x_end:.2f})"
+        )
 
         poses = PoseArray()
         poses.header.frame_id = 'world'
@@ -105,6 +165,7 @@ class SwarmCoordinator(Node):
                 pose.position.z = 1.0
                 poses.poses.append(pose)
 
+        self.num_waypoints = len(poses.poses)
         self.publisher.publish(poses)
 
 
