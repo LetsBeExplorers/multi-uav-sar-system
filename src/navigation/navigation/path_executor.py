@@ -123,28 +123,33 @@ class PathExecutor(Node):
 
         self.set_state("RETURNING")
 
-        home_pose = Pose()
-        home_pose.position.x = self.home_x
-        home_pose.position.y = self.home_y
-
-        # DEBUG: send to A* but DO NOT use it yet
-        msg = PoseArray()
-        msg.poses.append(home_pose)
-        self.waypoint_pub.publish(msg)
-
-        # Keep old behavior for now
-        self.waypoints = [home_pose]
+        # Clear execution
+        self.waypoints = []
         self.current_index = 0
+
+        # Ensure no old path interferes
+        self.latest_path_msg = None
+
+        # Send request
+        msg = PoseArray()
+        pose = Pose()
+        pose.position.x = self.home_x
+        pose.position.y = self.home_y
+        msg.poses.append(pose)
+
+        self.waypoint_pub.publish(msg)
 
     # Move toward current waypoint using odometry feedback
     def move_step(self):
+        # Finished previous path, check if a new one is waiting
         if not self.waypoints:
-            # Finished previous path, check if a new one is waiting
             if self.latest_path_msg:
                 self.start_path(self.latest_path_msg)
                 self.latest_path_msg = None
             else:
-                return  # nothing to do
+                # Stop motion while waiting
+                self.cmd_pub.publish(Twist())
+                return
 
         if self.current_index < len(self.waypoints):
             lookahead = 3 
