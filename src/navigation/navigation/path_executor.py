@@ -51,6 +51,7 @@ class PathExecutor(Node):
         self.current_index = 0
         self.finished = False
         self.state = "IDLE"
+        self.just_reached = False
 
         # Initial fallback position (overwritten once odometry is received)
         self.uav_x = 0.0
@@ -143,22 +144,24 @@ class PathExecutor(Node):
             # Publish velocity
             self.cmd_pub.publish(cmd)
 
-            # Check if we've reached the waypoint
             if abs(dx) < 0.2 and abs(dy) < 0.2:
 
-                # Stop to prevent drift
-                stop = Twist()
-                self.cmd_pub.publish(stop)
+                if not self.just_reached:
+                    self.just_reached = True
 
-                # Update current index
-                self.current_index += 1
+                    # Stop to prevent drift
+                    stop = Twist()
+                    self.cmd_pub.publish(stop)
 
-                # Log the waypoint
-                msg = Empty()
-                self.wp_pub.publish(msg)
-                self.get_logger().debug(
-                    f"Waypoint {self.current_index}: ({x:.2f}, {y:.2f})"
-                )
+                    # Update current index
+                    self.current_index += 1
+
+                    msg = Empty()
+                    self.wp_pub.publish(msg)
+                    self.get_logger().debug(f"Waypoint {self.current_index}: ({x:.2f}, {y:.2f})")
+
+            else:
+                self.just_reached = False
 
         # Trigger return-to-home ONCE
         if self.current_index >= len(self.waypoints) and not self.finished:
