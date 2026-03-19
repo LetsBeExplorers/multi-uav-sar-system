@@ -48,13 +48,6 @@ class AStarNavigationNode(Node):
             10
         )
 
-        self.create_subscription(
-            Empty,
-            f'/{uav}/nav/reached_waypoint',
-            self.reached_waypoint_callback,
-            10
-        )
-
         # Grid dimensions
         self.width = 21
         self.height = 21
@@ -74,12 +67,7 @@ class AStarNavigationNode(Node):
         # Waypoints received from topic
         self.current_position = None
         self.waypoints = []
-        self.current_waypoint_index = 0
-
         self.started = False
-
-        # Track planning cycles
-        self.has_active_plan = False
 
     # Just grabs position of drone
     def odom_callback(self, msg):
@@ -87,26 +75,14 @@ class AStarNavigationNode(Node):
         y = msg.pose.pose.position.y
         self.current_position = (x + 10, y + 10)
 
-    def reached_waypoint_callback(self, msg):
-        # Ignore if we never planned yet
-        if not self.has_active_plan:
-            return
-
-        if self.current_waypoint_index < len(self.waypoints):
-            self.get_logger().info(
-                f'Executor reached waypoint {self.waypoints[self.current_waypoint_index]}'
-            )
-
-            self.current_waypoint_index += 1
-            self.has_active_plan = False
-
-            self.plan_and_advance()
-
     def world_to_grid(self, x, y):
         return (x + 10, y + 10)
 
     def waypoint_callback(self, msg: PoseArray):
-        self.waypoints = [
+        if self.current_position is None:
+            return
+
+        waypoints = [
             self.world_to_grid(
                 int(round(p.position.x)),
                 int(round(p.position.y))
@@ -114,10 +90,18 @@ class AStarNavigationNode(Node):
             for p in msg.poses
         ]
 
-        self.current_waypoint_index = 0
-        self.has_active_plan = False
+        start = (int(self.current_position[0]), int(self.current_position[1]))
+        full_path = []
 
-        self.plan_and_advance()
+        for goal in waypoints:
+            partial = self.astar(start, goal)
+            if partial:
+                full_path.extend(partial)
+                start = goal
+
+        if full_path:
+            path_msg = self.build_path_msg(full_path)
+            self.path_pub.publish(path_msg)
 
     def heuristic(self, a: GridCell, b: GridCell) -> int:
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
@@ -237,18 +221,6 @@ class AStarNavigationNode(Node):
         if full_path:
             path_msg = self.build_path_msg(full_path)
             self.path_pub.publish(path_msg)
-
-    def plan_and_advance(self):
-        if self.current_position is None:
-            return
-        if not self.waypoints:
-            return
-        if self.current_waypoint_index >= len(self.waypoints):
-            return
-
-        # Compute full path once
-        self.compute_and_publish_full_path()
-
 
 def main(args=None):
     rclpy.init(args=args)

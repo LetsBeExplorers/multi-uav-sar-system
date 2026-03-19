@@ -21,7 +21,6 @@ class PathExecutor(Node):
 
         # Publishers
         self.cmd_pub = self.create_publisher(Twist, f'/{uav}/platform/cmd_vel', 10)
-        self.wp_pub = self.create_publisher(Empty, f'/{self.uav_name}/nav/reached_waypoint', 10)
 
         # QoS so we don't miss the waypoint message if it was sent before this node started
         qos = QoSProfile(
@@ -50,7 +49,6 @@ class PathExecutor(Node):
         self.waypoints = []
         self.current_index = 0
         self.state = "IDLE"
-        self.just_reached = False
         self.latest_path_msg = None
 
         # Initial fallback position (overwritten once odometry is received)
@@ -128,32 +126,27 @@ class PathExecutor(Node):
                 return  # nothing to do
 
         if self.current_index < len(self.waypoints):
-            target = self.waypoints[self.current_index]
+            lookahead = 3 
+            target_index = min(self.current_index + lookahead, len(self.waypoints) - 1)
+            target = self.waypoints[target_index]
             x, y = target.position.x, target.position.y
 
             dx = x - self.uav_x
             dy = y - self.uav_y
 
             cmd = Twist()
-            # Simple proportional control for smoother movement
-            cmd.linear.x = max(min(dx * 0.5, 1.0), -1.0)
-            cmd.linear.y = max(min(dy * 0.5, 1.0), -1.0)
+            
+            dist = math.hypot(dx, dy)
+
+            if dist > 0:
+                cmd.linear.x = dx / dist * 1.0
+                cmd.linear.y = dy / dist * 1.0
 
             self.cmd_pub.publish(cmd)
 
             # Check if waypoint reached
-            if abs(dx) < 0.5 and abs(dy) < 0.5:
-                if not self.just_reached:
-                    self.just_reached = True
-                    stop = Twist()
-                    self.cmd_pub.publish(stop)
-
-                    self.current_index += 1
-                    msg = Empty()
-                    self.wp_pub.publish(msg)
-                    self.get_logger().debug(f"Waypoint {self.current_index}: ({x:.2f}, {y:.2f})")
-            else:
-                self.just_reached = False
+            if abs(dx) < 0.2 and abs(dy) < 0.2:
+                self.current_index += 1
 
             # Reset once all waypoints are completed
             if self.current_index >= len(self.waypoints):
