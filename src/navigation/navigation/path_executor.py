@@ -109,7 +109,8 @@ class PathExecutor(Node):
         if msg.poses:
             self.waypoints = [pose.pose for pose in msg.poses]
             self.current_index = 0
-            self.state = "EXECUTING"
+            if self.state != "RETURNING":
+                self.state = "EXECUTING"
             self.get_logger().debug(f"Starting path with {len(self.waypoints)} waypoints")
 
     # Store incoming waypoints from A*
