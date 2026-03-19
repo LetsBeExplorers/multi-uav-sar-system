@@ -106,14 +106,23 @@ class PathExecutor(Node):
             self.state = "EXECUTING"
             self.get_logger().debug(f"Starting path with {len(self.waypoints)} waypoints")
 
-    # Store incoming waypoints from coordinator
+    # Store incoming waypoints from A*
     def waypoint_callback(self, msg):
-        # Always store latest path for later
         self.latest_path_msg = msg
+        self.start_path(msg)
 
-        # Only start moving if currently idle / no active waypoints
-        if not self.waypoints:
-            self.start_path(msg)
+    def go_home(self):
+        if self.home_x is None:
+            return
+
+        self.set_state("RETURNING")
+
+        home_pose = Pose()
+        home_pose.position.x = self.home_x
+        home_pose.position.y = self.home_y
+
+        self.waypoints = [home_pose]
+        self.current_index = 0
 
     # Move toward current waypoint using odometry feedback
     def move_step(self):
@@ -135,7 +144,7 @@ class PathExecutor(Node):
             dy = y - self.uav_y
 
             cmd = Twist()
-            
+
             dist = math.hypot(dx, dy)
 
             if dist > 0:
@@ -150,9 +159,20 @@ class PathExecutor(Node):
 
             # Reset once all waypoints are completed
             if self.current_index >= len(self.waypoints):
-                self.has_active_plan = False
-                self.waypoints = []
-                self.current_index = 0
+
+                # If returning, we're done for real
+                if self.state == "RETURNING":
+                    self.cmd_pub.publish(Twist())
+                    self.state = "IDLE"
+                    self.waypoints = []
+                    self.latest_path_msg = None
+                    self.current_index = 0
+                    return
+
+                # Otherwise, mission done → go home
+                self.publish_status(f"[{self.uav_name}] DONE")
+                self.go_home()
+                return
 
 def main(args=None):
     rclpy.init(args=args)
