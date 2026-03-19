@@ -71,10 +71,6 @@ class AStarNavigationNode(Node):
         self.has_active_plan = False
         self.timer = self.create_timer(0.5, self.plan_and_advance)
 
-        self.get_logger().info('A* obstacle navigation node started')
-        self.get_logger().info(f'Listening for waypoints on: {waypoint_topic}')
-        self.get_logger().info(f'Publishing planned path on: {path_topic}')
-
     # Just grabs position of drone
     def odom_callback(self, msg):
         x = msg.pose.pose.position.x
@@ -225,6 +221,8 @@ class AStarNavigationNode(Node):
             self.get_logger().warn(f'No valid path to {goal}')
             return
 
+        self.get_logger().info(f"Planning from {start} → {goal}")
+        self.get_logger().info(f"Path length: {len(path)}")
         self.path_pub.publish(self.build_path_msg(path))
 
     def plan_and_advance(self):
