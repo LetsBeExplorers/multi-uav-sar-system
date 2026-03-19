@@ -4,7 +4,7 @@ from typing import Dict, List, Optional, Tuple
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseArray, PoseStamped
-from nav_msgs.msg import Path
+from nav_msgs.msg import Path, Odometry
 
 
 GridCell = Tuple[int, int]
@@ -17,15 +17,24 @@ class AStarNavigationNode(Node):
         # Parameters for easier integration later
         self.declare_parameter('waypoint_topic', '/input_waypoints')
         self.declare_parameter('path_topic', '/planned_path')
-
-        waypoint_topic = self.get_parameter('waypoint_topic').value
-        path_topic = self.get_parameter('path_topic').value
+        self.declare_parameter('uav_name', 'x1')
+        
+        uav = self.get_parameter('uav_name').value
+        waypoint_topic = f'/{uav}/nav/waypoints'
+        path_topic = f'/{uav}/nav/planned_path'
 
         self.path_pub = self.create_publisher(Path, path_topic, 10)
         self.waypoint_sub = self.create_subscription(
             PoseArray,
             waypoint_topic,
             self.waypoint_callback,
+            10
+        )
+
+        self.create_subscription(
+            Odometry,
+            f'/{uav}/state/odom',
+            self.odom_callback,
             10
         )
 
@@ -62,10 +71,19 @@ class AStarNavigationNode(Node):
         self.get_logger().info(f'Listening for waypoints on: {waypoint_topic}')
         self.get_logger().info(f'Publishing planned path on: {path_topic}')
 
+    def odom_callback(self, msg):
+        x = int(round(msg.pose.pose.position.x))
+        y = int(round(msg.pose.pose.position.y))
+        self.current_position = self.world_to_grid(x, y)
+
     def world_to_grid(self, x, y):
         return (x + 10, y + 10)
 
     def waypoint_callback(self, msg: PoseArray):
+
+        if self.received_waypoints:
+            return   # ignore duplicates
+
         self.waypoints = []
 
         for pose in msg.poses:
@@ -169,6 +187,11 @@ class AStarNavigationNode(Node):
             f'Dynamic obstacle added at cells: {dynamic_obstacles}'
         )
 
+    def reached_goal(self, goal):
+        dx = abs(self.current_position[0] - goal[0])
+        dy = abs(self.current_position[1] - goal[1])
+        return dx <= 1 and dy <= 1   # small tolerance
+
     def plan_and_advance(self):
         if not self.received_waypoints:
             return
@@ -196,8 +219,8 @@ class AStarNavigationNode(Node):
         path_msg = self.build_path_msg(path)
         self.path_pub.publish(path_msg)
 
-        self.current_position = goal
-        self.current_waypoint_index += 1
+        if self.reached_goal(goal):
+            self.current_waypoint_index += 1
 
         if self.current_waypoint_index < len(self.waypoints):
             self.get_logger().info(

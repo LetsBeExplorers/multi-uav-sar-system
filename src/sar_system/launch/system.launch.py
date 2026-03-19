@@ -63,8 +63,7 @@ def generate_launch_description():
                 executable='astar_navigation_node',
                 name='astar_navigation_' + uav,
                 parameters=[
-                    {'waypoint_topic': f'/{uav}/nav/waypoints'},
-                    {'path_topic': f'/{uav}/nav/planned_path'}
+                    {'uav_name': uav}
                 ]
             )
         )
