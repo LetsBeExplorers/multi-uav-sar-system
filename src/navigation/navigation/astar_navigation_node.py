@@ -5,6 +5,7 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseArray, PoseStamped
 from nav_msgs.msg import Path, Odometry
+from std_msgs.msg import Empty
 
 
 GridCell = Tuple[int, int]
@@ -35,6 +36,13 @@ class AStarNavigationNode(Node):
             Odometry,
             f'/{uav}/state/odom',
             self.odom_callback,
+            10
+        )
+
+        self.create_subscription(
+            Empty,
+            f'/{uav}/nav/reached_waypoint',
+            self.reached_waypoint_callback,
             10
         )
 
@@ -73,14 +81,23 @@ class AStarNavigationNode(Node):
         y = msg.pose.pose.position.y
         self.current_position = (x + 10, y + 10)
 
+    def reached_waypoint_callback(self, msg):
+        if self.current_waypoint_index < len(self.waypoints):
+            self.get_logger().info(
+                f'Executor reached waypoint {self.waypoints[self.current_waypoint_index]}'
+            )
+
+            self.current_waypoint_index += 1
+            self.has_active_plan = False
+
     def world_to_grid(self, x, y):
         return (x + 10, y + 10)
 
     def waypoint_callback(self, msg: PoseArray):
         self.waypoints = [
             self.world_to_grid(
-                int(round(p.pose.position.x)),
-                int(round(p.pose.position.y))
+                int(round(p.position.x)),
+                int(round(p.position.y))
             )
             for p in msg.poses
         ]
@@ -192,7 +209,7 @@ class AStarNavigationNode(Node):
 
         dist = (dx**2 + dy**2) ** 0.5
 
-        return dist < 0.5 # tolerance
+        return dist < 0.2 # tolerance
 
     def compute_and_publish_path(self):
         goal = self.waypoints[self.current_waypoint_index]
@@ -231,13 +248,7 @@ class AStarNavigationNode(Node):
 
         # If moving then check if reached
         if self.reached_goal(goal):
-            self.get_logger().info(f'Reached waypoint {goal}')
-
-            self.current_waypoint_index += 1
             self.has_active_plan = False
-
-            if self.current_waypoint_index >= len(self.waypoints):
-                self.get_logger().info('Mission complete')
 
 
 def main(args=None):
