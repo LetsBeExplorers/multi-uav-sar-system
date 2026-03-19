@@ -54,47 +54,39 @@ class AStarNavigationNode(Node):
             gx, gy = self.world_to_grid(x, y)
             self.grid[gy][gx] = 1
 
-        # Current UAV position
-        self.current_position = self.world_to_grid(-10, -10)
-
         # Waypoints received from topic
-        self.waypoints: List[GridCell] = []
+        self.current_position = None
+        self.waypoints = []
         self.current_waypoint_index = 0
-        self.received_waypoints = False
 
         # Track planning cycles
-        self.plan_cycle = 0
-
-        self.timer = self.create_timer(2.0, self.plan_and_advance)
+        self.has_active_plan = False
+        self.timer = self.create_timer(0.5, self.plan_and_advance)
 
         self.get_logger().info('A* obstacle navigation node started')
         self.get_logger().info(f'Listening for waypoints on: {waypoint_topic}')
         self.get_logger().info(f'Publishing planned path on: {path_topic}')
 
+    # Just grabs position of drone
     def odom_callback(self, msg):
-        x = int(round(msg.pose.pose.position.x))
-        y = int(round(msg.pose.pose.position.y))
-        self.current_position = self.world_to_grid(x, y)
+        x = msg.pose.pose.position.x
+        y = msg.pose.pose.position.y
+        self.current_position = (x + 10, y + 10)
 
     def world_to_grid(self, x, y):
         return (x + 10, y + 10)
 
     def waypoint_callback(self, msg: PoseArray):
-
-        if self.received_waypoints:
-            return   # ignore duplicates
-
-        self.waypoints = []
-
-        for pose in msg.poses:
-            wx = int(round(pose.position.x))
-            wy = int(round(pose.position.y))
-
-            gx, gy = self.world_to_grid(wx, wy)
-            self.waypoints.append((gx, gy))
+        self.waypoints = [
+            self.world_to_grid(
+                int(round(p.pose.position.x)),
+                int(round(p.pose.position.y))
+            )
+            for p in msg.poses
+        ]
 
         self.current_waypoint_index = 0
-        self.received_waypoints = True
+        self.has_active_plan = False
 
         self.get_logger().info(f'Received waypoints: {self.waypoints}')
 
@@ -188,44 +180,64 @@ class AStarNavigationNode(Node):
         )
 
     def reached_goal(self, goal):
-        dx = abs(self.current_position[0] - goal[0])
-        dy = abs(self.current_position[1] - goal[1])
-        return dx <= 1 and dy <= 1   # small tolerance
+        # Convert grid back to world coords
+        goal_x = goal[0] - 10
+        goal_y = goal[1] - 10
+
+        current_x = self.current_position[0] - 10
+        current_y = self.current_position[1] - 10
+
+        dx = goal_x - current_x
+        dy = goal_y - current_y
+
+        dist = (dx**2 + dy**2) ** 0.5
+
+        return dist < 0.5 # tolerance
+
+    def compute_and_publish_path(self):
+        goal = self.waypoints[self.current_waypoint_index]
+
+        start = (
+            int(self.current_position[0]),
+            int(self.current_position[1])
+        )
+
+        path = self.astar(start, goal)
+
+        if path is None:
+            self.get_logger().warn(f'No valid path to {goal}')
+            return
+
+        self.path_pub.publish(self.build_path_msg(path))
 
     def plan_and_advance(self):
-        if not self.received_waypoints:
+        # Preconditions
+        if self.current_position is None:
+            return
+
+        if not self.waypoints:
             return
 
         if self.current_waypoint_index >= len(self.waypoints):
-            self.get_logger().info('All waypoints completed')
             return
-
-#        if self.plan_cycle == 2:
-#            self.add_dynamic_obstacle()
 
         goal = self.waypoints[self.current_waypoint_index]
 
+        # If no plan then create one
+        if not self.has_active_plan:
+            self.compute_and_publish_path()
+            self.has_active_plan = True
+            return
+
+        # If moving then check if reached
         if self.reached_goal(goal):
             self.get_logger().info(f'Reached waypoint {goal}')
 
             self.current_waypoint_index += 1
+            self.has_active_plan = False
 
             if self.current_waypoint_index >= len(self.waypoints):
                 self.get_logger().info('Mission complete')
-                return
-
-            goal = self.waypoints[self.current_waypoint_index]
-            self.get_logger().info(f'Next waypoint: {goal}')
-
-        # Always plan toward CURRENT goal
-        path = self.astar(self.current_position, goal)
-
-        if path is None:
-            self.get_logger().warn(f'No valid path found to waypoint {goal}')
-            return
-
-        path_msg = self.build_path_msg(path)
-        self.path_pub.publish(path_msg)
 
 
 def main(args=None):
