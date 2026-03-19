@@ -27,7 +27,7 @@ class PathExecutor(Node):
         qos = QoSProfile(
             depth=1,
             reliability=ReliabilityPolicy.RELIABLE,
-            durability=DurabilityPolicy.VOLATILE
+            durability=DurabilityPolicy.TRANSIENT_LOCAL
         )
 
         # Receives waypoint list
@@ -51,6 +51,7 @@ class PathExecutor(Node):
         self.current_index = 0
         self.state = "IDLE"
         self.just_reached = False
+        self.latest_path_msg = None
 
         # Initial fallback position (overwritten once odometry is received)
         self.uav_x = 0.0
@@ -99,23 +100,34 @@ class PathExecutor(Node):
             self.home_x = self.uav_x
             self.home_y = self.uav_y
 
-    # Store incoming waypoints from coordinator
-    def waypoint_callback(self, msg):
+    def start_path(self, msg):
+        # Initialize internal waypoint tracking
         if msg.poses:
             self.waypoints = [pose.pose for pose in msg.poses]
             self.current_index = 0
-
             self.state = "EXECUTING"
-            self.get_logger().debug(f"Received {len(self.waypoints)} waypoints")
+            self.get_logger().debug(f"Starting path with {len(self.waypoints)} waypoints")
+
+    # Store incoming waypoints from coordinator
+    def waypoint_callback(self, msg):
+        # Always store latest path for later
+        self.latest_path_msg = msg
+
+        # Only start moving if currently idle / no active waypoints
+        if not self.waypoints:
+            self.start_path(msg)
 
     # Move toward current waypoint using odometry feedback
     def move_step(self):
-
         if not self.waypoints:
-            return
+            # Finished previous path, check if a new one is waiting
+            if self.latest_path_msg:
+                self.start_path(self.latest_path_msg)
+                self.latest_path_msg = None
+            else:
+                return  # nothing to do
 
         if self.current_index < len(self.waypoints):
-
             target = self.waypoints[self.current_index]
             x, y = target.position.x, target.position.y
 
@@ -123,38 +135,31 @@ class PathExecutor(Node):
             dy = y - self.uav_y
 
             cmd = Twist()
+            # Simple proportional control for smoother movement
+            cmd.linear.x = max(min(dx * 0.5, 1.0), -1.0)
+            cmd.linear.y = max(min(dy * 0.5, 1.0), -1.0)
 
-            # Row-first lawn-mower logic: always move along X first
-            if abs(dx) >= 0.2:
-                cmd.linear.x = 1.0 if dx > 0 else -1.0
-                cmd.linear.y = 0.0
-            else:
-                # reached X, now move along Y
-                cmd.linear.x = 0.0
-                if abs(dy) >= 0.2:
-                    cmd.linear.y = 1.0 if dy > 0 else -1.0
-
-            # Publish velocity
             self.cmd_pub.publish(cmd)
 
-            if abs(dx) < 0.2 and abs(dy) < 0.2:
-
+            # Check if waypoint reached
+            if abs(dx) < 0.5 and abs(dy) < 0.5:
                 if not self.just_reached:
                     self.just_reached = True
-
-                    # Stop to prevent drift
                     stop = Twist()
                     self.cmd_pub.publish(stop)
 
-                    # Update current index
                     self.current_index += 1
-
                     msg = Empty()
                     self.wp_pub.publish(msg)
                     self.get_logger().debug(f"Waypoint {self.current_index}: ({x:.2f}, {y:.2f})")
-
             else:
                 self.just_reached = False
+
+            # Reset once all waypoints are completed
+            if self.current_index >= len(self.waypoints):
+                self.has_active_plan = False
+                self.waypoints = []
+                self.current_index = 0
 
 def main(args=None):
     rclpy.init(args=args)

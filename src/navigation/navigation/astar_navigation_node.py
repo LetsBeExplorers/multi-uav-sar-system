@@ -2,7 +2,10 @@ import heapq
 from typing import Dict, List, Optional, Tuple
 
 import rclpy
+import time
+import threading
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from geometry_msgs.msg import PoseArray, PoseStamped
 from nav_msgs.msg import Path, Odometry
 from std_msgs.msg import Empty
@@ -24,12 +27,18 @@ class AStarNavigationNode(Node):
         waypoint_topic = f'/{uav}/nav/waypoints'
         path_topic = f'/{uav}/nav/planned_path'
 
-        self.path_pub = self.create_publisher(Path, path_topic, 10)
+        qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL
+        )
+        self.path_pub = self.create_publisher(Path, path_topic, qos)
+
         self.waypoint_sub = self.create_subscription(
             PoseArray,
             waypoint_topic,
             self.waypoint_callback,
-            10
+            qos
         )
 
         self.create_subscription(
@@ -67,6 +76,8 @@ class AStarNavigationNode(Node):
         self.waypoints = []
         self.current_waypoint_index = 0
 
+        self.started = False
+
         # Track planning cycles
         self.has_active_plan = False
 
@@ -76,10 +87,11 @@ class AStarNavigationNode(Node):
         y = msg.pose.pose.position.y
         self.current_position = (x + 10, y + 10)
 
-        if not self.has_active_plan and self.waypoints:
-            self.plan_and_advance()
-
     def reached_waypoint_callback(self, msg):
+        # Ignore if we never planned yet
+        if not self.has_active_plan:
+            return
+
         if self.current_waypoint_index < len(self.waypoints):
             self.get_logger().info(
                 f'Executor reached waypoint {self.waypoints[self.current_waypoint_index]}'
@@ -106,7 +118,6 @@ class AStarNavigationNode(Node):
         self.has_active_plan = False
 
         self.plan_and_advance()
-        self.get_logger().info(f'Received waypoints: {self.waypoints}')
 
     def heuristic(self, a: GridCell, b: GridCell) -> int:
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
@@ -212,44 +223,31 @@ class AStarNavigationNode(Node):
 
         return dist < 0.2 # tolerance
 
-    def compute_and_publish_path(self):
-        goal = self.waypoints[self.current_waypoint_index]
-
-        start = (
-            int(self.current_position[0]),
-            int(self.current_position[1])
-        )
-
-        path = self.astar(start, goal)
-
-        if path is None:
-            self.get_logger().warn(f'No valid path to {goal}')
+    def compute_and_publish_full_path(self):
+        if not self.waypoints or self.current_position is None:
             return
-            
-        self.path_pub.publish(self.build_path_msg(path))
+        full_path = []
+        start = (int(self.current_position[0]), int(self.current_position[1]))
+        for idx in range(self.current_waypoint_index, len(self.waypoints)):
+            goal = self.waypoints[idx]
+            partial_path = self.astar(start, goal)
+            if partial_path:
+                full_path.extend(partial_path)
+                start = goal
+        if full_path:
+            path_msg = self.build_path_msg(full_path)
+            self.path_pub.publish(path_msg)
 
     def plan_and_advance(self):
-        # Preconditions
         if self.current_position is None:
             return
-
         if not self.waypoints:
             return
-
         if self.current_waypoint_index >= len(self.waypoints):
             return
 
-        goal = self.waypoints[self.current_waypoint_index]
-
-        # If no plan then create one
-        if not self.has_active_plan:
-            self.compute_and_publish_path()
-            self.has_active_plan = True
-            return
-
-        # If moving then check if reached
-        if self.reached_goal(goal):
-            self.has_active_plan = False
+        # Compute full path once
+        self.compute_and_publish_full_path()
 
 
 def main(args=None):

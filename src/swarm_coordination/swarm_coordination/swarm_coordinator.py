@@ -93,7 +93,7 @@ class SwarmCoordinator(Node):
         qos = QoSProfile(
             depth=1,
             reliability=ReliabilityPolicy.RELIABLE,
-            durability=DurabilityPolicy.VOLATILE
+            durability=DurabilityPolicy.TRANSIENT_LOCAL
         )
 
         topic = f'/{self.uav_id}/nav/waypoints'
