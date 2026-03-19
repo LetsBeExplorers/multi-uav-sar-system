@@ -137,6 +137,7 @@ class PathExecutor(Node):
         pose.position.y = self.home_y
         msg.poses.append(pose)
 
+        self.get_logger().debug(f"GO_HOME publish: ({self.home_x}, {self.home_y})")
         self.waypoint_pub.publish(msg)
 
     # Move toward current waypoint using odometry feedback
