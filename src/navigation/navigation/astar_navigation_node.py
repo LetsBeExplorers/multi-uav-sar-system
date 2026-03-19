@@ -76,6 +76,9 @@ class AStarNavigationNode(Node):
         y = msg.pose.pose.position.y
         self.current_position = (x + 10, y + 10)
 
+        if not self.has_active_plan and self.waypoints:
+            self.plan_and_advance()
+
     def reached_waypoint_callback(self, msg):
         if self.current_waypoint_index < len(self.waypoints):
             self.get_logger().info(

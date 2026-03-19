@@ -49,7 +49,6 @@ class PathExecutor(Node):
         # Internal state
         self.waypoints = []
         self.current_index = 0
-        self.finished = False
         self.state = "IDLE"
         self.just_reached = False
 
@@ -102,19 +101,12 @@ class PathExecutor(Node):
 
     # Store incoming waypoints from coordinator
     def waypoint_callback(self, msg):
-
-        # Ignore if currently running a mission
-        if self.state == "EXECUTING":
-            return
-
         if msg.poses:
             self.waypoints = [pose.pose for pose in msg.poses]
             self.current_index = 0
 
-            # Set state and send debug message
             self.state = "EXECUTING"
             self.get_logger().debug(f"Received {len(self.waypoints)} waypoints")
-            self.get_logger().info(f"New path received: {len(self.waypoints)} points")
 
     # Move toward current waypoint using odometry feedback
     def move_step(self):
@@ -163,14 +155,6 @@ class PathExecutor(Node):
 
             else:
                 self.just_reached = False
-
-        # Trigger return-to-home ONCE
-        if self.current_index >= len(self.waypoints):
-            return
-
-        # Final completion AFTER returning home
-        elif self.finished and self.current_index >= len(self.waypoints):
-            self.set_state("DONE")
 
 def main(args=None):
     rclpy.init(args=args)
