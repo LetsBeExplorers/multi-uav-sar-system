@@ -21,7 +21,7 @@ class PathExecutor(Node):
 
         # Publishers
         self.cmd_pub = self.create_publisher(Twist, f'/{uav}/platform/cmd_vel', 10)
-        self.wp_pub = self.create_publisher(Empty, f'/{self.uav_id}/nav/reached_waypoint', 10)
+        self.wp_pub = self.create_publisher(Empty, f'/{self.uav_name}/nav/reached_waypoint', 10)
 
         # QoS so we don't miss the waypoint message if it was sent before this node started
         qos = QoSProfile(
