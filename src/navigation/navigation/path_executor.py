@@ -87,11 +87,9 @@ class PathExecutor(Node):
     def stop_cb(self, msg):
         self.waypoints = []
         self.current_index = 0
-        self.finished = False
+        self.latest_path_msg = None
 
-        stop = Twist()
-        self.cmd_pub.publish(stop)
-
+        self.cmd_pub.publish(Twist())
         self.set_state("IDLE")
 
     # Update position from odometry
@@ -143,6 +141,10 @@ class PathExecutor(Node):
 
     # Move toward current waypoint using odometry feedback
     def move_step(self):
+        if self.state == "IDLE":
+            self.cmd_pub.publish(Twist())
+            return
+
         # Finished previous path, check if a new one is waiting
         if not self.waypoints:
             if self.latest_path_msg:
