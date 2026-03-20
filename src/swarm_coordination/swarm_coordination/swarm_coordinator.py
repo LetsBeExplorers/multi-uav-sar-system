@@ -139,6 +139,10 @@ class SwarmCoordinator(Node):
         # Generate and send waypoints
         self.publish_waypoints()
 
+        # Publish information to console
+        self.publish_status(f"[{self.uav_id}] AREA x:[{self.x_start:.1f},{self.x_end:.1f}] rows:{self.rows}")
+        self.publish_status(f"[{self.uav_id}] WAYPOINTS: {self.num_waypoints}")
+
     # Sets state when emergency stop is initiated
     def stop_cb(self, msg):
         self.state = "IDLE"
@@ -151,6 +155,12 @@ class SwarmCoordinator(Node):
     # Measures # of waypoints reached
     def wp_cb(self, msg):
         self.visited_waypoints += 1
+
+        # Only print every few waypoints to avoid spam
+        if self.visited_waypoints % 3 == 0 or self.visited_waypoints == self.num_waypoints:
+            self.publish_status(
+                f"[{self.uav_id}] PROGRESS: {self.visited_waypoints}/{self.num_waypoints}"
+            )
 
     # ==============================
     # Core Logic
