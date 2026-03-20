@@ -87,8 +87,6 @@ class MissionManager(Node):
             self.mission_state = text
 
     def print_dashboard(self):
-        print("\033[H\033[J", end="")  # clear screen
-
         print("=== MISSION STATUS ===")
         print(self.mission_state)
 
