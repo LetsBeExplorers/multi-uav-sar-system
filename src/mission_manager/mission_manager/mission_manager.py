@@ -19,7 +19,6 @@ class MissionManager(Node):
 
         # Sets initial state and where to send status updates
         self.state = "IDLE"
-        self.status_pub = self.create_publisher(String, '/mission/status', 10)
 
         # Dashboard Logic
         self.uav_data = {}
@@ -38,12 +37,6 @@ class MissionManager(Node):
         self.total_uavs = 3   # match your system
         self.mission_complete = False
         self.get_logger().debug("Mission Manager ready")
-
-    # Publishes state
-    def publish_status(self, text):
-        msg = String()
-        msg.data = text
-        self.status_pub.publish(msg)
 
     # Print incoming status messages
     def status_callback(self, msg):
