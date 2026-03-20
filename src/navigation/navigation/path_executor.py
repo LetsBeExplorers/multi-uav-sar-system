@@ -173,8 +173,11 @@ class PathExecutor(Node):
             self.cmd_pub.publish(cmd)
 
             # Check if waypoint reached
-            if abs(dx) < 0.2 and abs(dy) < 0.2:
+            if dist < 0.2:
                 self.current_index += 1
+
+                # Immediately stop residual motion at waypoint
+                self.cmd_pub.publish(Twist())
 
             # Reset once all waypoints are completed
             if self.current_index >= len(self.waypoints):
