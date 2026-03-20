@@ -91,7 +91,6 @@ class AStarNavigationNode(Node):
         ]
 
         start = (int(self.current_position[0]), int(self.current_position[1]))
-        self.get_logger().warn(f"START: {start}, GOAL: {waypoints[0]}")
         full_path = []
 
         for goal in waypoints:
