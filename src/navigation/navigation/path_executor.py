@@ -209,7 +209,7 @@ class PathExecutor(Node):
 
                     # Otherwise → this was the final leg → run original cleanup
                     self.cmd_pub.publish(Twist())
-                    self.state = "IDLE"
+                    self.set_state("IDLE")
                     self.waypoints = []
                     self.latest_path_msg = None
                     self.current_index = 0
