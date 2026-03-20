@@ -23,7 +23,7 @@ class MissionManager(Node):
         # Dashboard Logic
         self.uav_data = {}
         self.mission_state = "[MISSION] IDLE"
-        self.create_timer(0.5, self.print_dashboard)
+        self.create_timer(5.0, self.print_dashboard)
 
         # Subscriber (status/logs)
         self.create_subscription(
