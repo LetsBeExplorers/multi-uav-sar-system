@@ -8,7 +8,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from geometry_msgs.msg import PoseArray, PoseStamped
 from nav_msgs.msg import Path, Odometry
-from std_msgs.msg import Empty
+from std_msgs.msg import Empty, Int32, String
 
 
 GridCell = Tuple[int, int]
@@ -23,9 +23,9 @@ class AStarNavigationNode(Node):
         self.declare_parameter('path_topic', '/planned_path')
         self.declare_parameter('uav_name', 'x1')
         
-        uav = self.get_parameter('uav_name').value
-        waypoint_topic = f'/{uav}/nav/waypoints'
-        path_topic = f'/{uav}/nav/planned_path'
+        self.uav = self.get_parameter('uav_name').value
+        waypoint_topic = f'/{self.uav}/nav/waypoints'
+        path_topic = f'/{self.uav}/nav/planned_path'
 
         qos = QoSProfile(
             depth=1,
@@ -43,8 +43,16 @@ class AStarNavigationNode(Node):
 
         self.create_subscription(
             Odometry,
-            f'/{uav}/state/odom',
+            f'/{self.uav}/state/odom',
             self.odom_callback,
+            10
+        )
+
+        # Publishes Mission Status and # of Waypoints
+        self.status_pub = self.create_publisher(String, '/mission/status', 10)
+        self.waypoint_count_pub = self.create_publisher(
+            Int32,
+            f'/{self.uav}/nav/waypoint_count',
             10
         )
 
@@ -102,6 +110,16 @@ class AStarNavigationNode(Node):
         if full_path:
             path_msg = self.build_path_msg(full_path)
             self.path_pub.publish(path_msg)
+
+            # Publish waypoint count to nodes
+            count_msg = Int32()
+            count_msg.data = len(full_path)
+            self.waypoint_count_pub.publish(count_msg)
+
+            # Publish waypoints to console
+            msg = String()
+            msg.data = f"[{self.uav}] WAYPOINTS: {len(full_path)}"
+            self.status_pub.publish(msg)
 
     def heuristic(self, a: GridCell, b: GridCell) -> int:
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
