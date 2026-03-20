@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import rclpy
+import time
 from rclpy.node import Node
 from std_msgs.msg import Empty, String
 import threading
@@ -23,7 +24,6 @@ class MissionManager(Node):
         # Dashboard Logic
         self.uav_data = {}
         self.mission_state = "[MISSION] IDLE"
-        self.create_timer(5.0, self.print_dashboard)
 
         # Subscriber (status/logs)
         self.create_subscription(
@@ -56,7 +56,7 @@ class MissionManager(Node):
 
             if len(self.done_uavs) == self.total_uavs and not self.mission_complete:
                 self.mission_complete = True
-                self.publish_status("[MISSION] COMPLETE")
+                self.mission_state = "[MISSION] COMPLETE"
 
         # Dashboard data parsing
         if text.startswith("[x"):
@@ -83,10 +83,10 @@ class MissionManager(Node):
             elif "AREA" in text:
                 self.uav_data[uav]["area"] = text.split("] ")[1]
 
-        elif "[MISSION]" in text:
-            self.mission_state = text
+        self.print_dashboard()
 
     def print_dashboard(self):
+        print("\033[H\033[J", end="")
         print("=== MISSION STATUS ===")
         print(self.mission_state)
 
@@ -108,10 +108,12 @@ class MissionManager(Node):
             wp = data.get("waypoints", "-")
             area = data.get("area", "")
 
-            print(f"{uav} | {state:<10} | {prog:<10} | wp:{wp}")
+            print(f"{uav} | {state:<10} | {prog:<10} | waypoints:{wp}")
 
             if area:
                 print(f"   ↳ {area}")
+
+        print("\nCommands: start | stop | exit")
 
     # Send start command
     def send_start(self):
@@ -126,7 +128,7 @@ class MissionManager(Node):
 
         # Send status
         self.start_pub.publish(Empty())
-        self.publish_status("[MISSION] STARTED")
+        self.mission_state = "[MISSION] RUNNING"
         self.get_logger().debug("START sent")
 
     # Send stop command
@@ -140,7 +142,7 @@ class MissionManager(Node):
         
         # Send status
         self.stop_pub.publish(Empty())
-        self.publish_status("[MISSION] STOPPED")
+        self.mission_state = "[MISSION] STOPPED"
         self.get_logger().debug("STOP sent")
 
 # Background spin thread with exception handling to prevent shutdown errors
