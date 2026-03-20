@@ -163,7 +163,7 @@ class PathExecutor(Node):
                 return
 
         if self.current_index < len(self.waypoints):
-            lookahead = 3 
+            lookahead = 5
             target_index = min(self.current_index + lookahead, len(self.waypoints) - 1)
             target = self.waypoints[target_index]
             x, y = target.position.x, target.position.y
@@ -174,10 +174,11 @@ class PathExecutor(Node):
             cmd = Twist()
 
             dist = math.hypot(dx, dy)
+            SPEED = 2.0
 
             if dist > 0:
-                cmd.linear.x = dx / dist * 1.0
-                cmd.linear.y = dy / dist * 1.0
+                cmd.linear.x = dx / dist * SPEED
+                cmd.linear.y = dy / dist * SPEED
 
             self.cmd_pub.publish(cmd)
 

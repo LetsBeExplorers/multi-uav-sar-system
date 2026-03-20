@@ -65,7 +65,7 @@ class AStarNavigationNode(Node):
         self.obstacles = [
             (2,2), (2,4),
             (5,3), (5,5),
-            (8,4), (8,6),
+            (3,1), (4,2), (3,3)
         ]
 
         for x, y in self.obstacles:
