@@ -4,7 +4,7 @@ import time
 import rclpy
 import os
 from rclpy.node import Node
-from std_msgs.msg import Empty, String
+from std_msgs.msg import Empty, String, Int32
 from geometry_msgs.msg import Pose, PoseArray
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from datetime import datetime
@@ -86,6 +86,13 @@ class SwarmCoordinator(Node):
             10
         )
 
+        self.create_subscription(
+            Int32,
+            f'/{self.uav_id}/nav/waypoint_count',
+            self.waypoint_count_cb,
+            10
+        )
+
         # Status publisher
         self.status_pub = self.create_publisher(String, '/mission/status', 10)
 
@@ -141,7 +148,6 @@ class SwarmCoordinator(Node):
 
         # Publish information to console
         self.publish_status(f"[{self.uav_id}] AREA x:[{self.x_start:.1f},{self.x_end:.1f}] rows:{self.rows}")
-        self.publish_status(f"[{self.uav_id}] WAYPOINTS: {self.num_waypoints}")
 
     # Sets state when emergency stop is initiated
     def stop_cb(self, msg):
@@ -157,10 +163,15 @@ class SwarmCoordinator(Node):
         self.visited_waypoints += 1
 
         # Only print every few waypoints to avoid spam
-        if self.visited_waypoints % 3 == 0 or self.visited_waypoints == self.num_waypoints:
+        if self.visited_waypoints % 10 == 0 or self.visited_waypoints == self.num_waypoints:
             self.publish_status(
                 f"[{self.uav_id}] PROGRESS: {self.visited_waypoints}/{self.num_waypoints}"
             )
+
+    # Measures # of waypoints that exist on a path
+    def waypoint_count_cb(self, msg):
+        self.num_waypoints = msg.data
+        self.visited_waypoints = 0
 
     # ==============================
     # Core Logic
@@ -185,7 +196,6 @@ class SwarmCoordinator(Node):
         msg.header.frame_id = 'world'
         msg.poses = poses
 
-        self.num_waypoints = len(poses)
         self.publisher.publish(msg)
 
     # ==============================
