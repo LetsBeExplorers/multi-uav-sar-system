@@ -20,6 +20,11 @@ class MissionManager(Node):
         self.state = "IDLE"
         self.status_pub = self.create_publisher(String, '/mission/status', 10)
 
+        # Dashboard Logic
+        self.uav_data = {}
+        self.mission_state = "[MISSION] IDLE"
+        self.create_timer(0.5, self.print_dashboard)
+
         # Subscriber (status/logs)
         self.create_subscription(
             String,
@@ -43,19 +48,72 @@ class MissionManager(Node):
     # Print incoming status messages
     def status_callback(self, msg):
         text = msg.data
-        print(f"\r{text}")
-        print(">> ", end="", flush=True)
 
-        # Detect DONE messages
+        # Determine if mission is complete
         if "DONE" in text:
-            # Extract UAV name (e.g., [x1])
             uav = text.split("]")[0] + "]"
             self.done_uavs.add(uav)
 
-            # Check if all UAVs finished
             if len(self.done_uavs) == self.total_uavs and not self.mission_complete:
                 self.mission_complete = True
                 self.publish_status("[MISSION] COMPLETE")
+
+        # Dashboard data parsing
+        if text.startswith("[x"):
+            uav = text.split("]")[0][1:]  # "x1"
+            self.uav_data.setdefault(uav, {})
+
+            if "SEARCHING" in text:
+                self.uav_data[uav]["state"] = "SEARCHING"
+
+            elif "RETURNING" in text:
+                self.uav_data[uav]["state"] = "RETURNING"
+
+            elif "DONE" in text:
+                self.uav_data[uav]["state"] = "DONE"
+
+            elif "PROGRESS" in text:
+                prog = text.split("PROGRESS:")[1].strip()
+                self.uav_data[uav]["progress"] = prog
+
+            elif "WAYPOINTS" in text:
+                count = text.split(":")[-1].strip()
+                self.uav_data[uav]["waypoints"] = count
+
+            elif "AREA" in text:
+                self.uav_data[uav]["area"] = text.split("] ")[1]
+
+        elif "[MISSION]" in text:
+            self.mission_state = text
+
+    def print_dashboard(self):
+        print("\033[H\033[J", end="")  # clear screen
+
+        print("=== MISSION STATUS ===")
+        print(self.mission_state)
+
+        # If mission hasn't started yet
+        if self.state != "RUNNING":
+            print("\nWaiting for start command...")
+            return
+
+        # If running but no data yet
+        if not self.uav_data:
+            print("\nInitializing UAVs...")
+            return
+
+        for uav in sorted(self.uav_data.keys()):
+            data = self.uav_data[uav]
+
+            state = data.get("state", "-")
+            prog = data.get("progress", "-")
+            wp = data.get("waypoints", "-")
+            area = data.get("area", "")
+
+            print(f"{uav} | {state:<10} | {prog:<10} | wp:{wp}")
+
+            if area:
+                print(f"   ↳ {area}")
 
     # Send start command
     def send_start(self):
