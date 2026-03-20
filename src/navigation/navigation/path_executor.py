@@ -51,6 +51,13 @@ class PathExecutor(Node):
             qos
         )
 
+
+        self.reached_pub = self.create_publisher(
+            Empty,
+            f'/{self.uav_name}/nav/reached_waypoint',
+            10
+        )
+
         # Internal state
         self.waypoints = []
         self.current_index = 0
@@ -177,9 +184,11 @@ class PathExecutor(Node):
             # Check if waypoint reached
             if dist < 0.2:
                 self.current_index += 1
+                self.reached_pub.publish(Empty())
 
-                # Immediately stop residual motion at waypoint
-                self.cmd_pub.publish(Twist())
+                # Only hard stop at FINAL waypoint
+                if self.current_index >= len(self.waypoints):
+                    self.cmd_pub.publish(Twist())
 
             # Reset once all waypoints are completed
             if self.current_index >= len(self.waypoints):
