@@ -181,6 +181,19 @@ class PathExecutor(Node):
 
                 # If returning, we're done for real
                 if self.state == "RETURNING":
+
+                    # If this was a multi-point path → it was the A* RETURNING path
+                    if len(self.waypoints) > 1:
+                        pose = Pose()
+                        pose.position.x = self.home_x
+                        pose.position.y = self.home_y
+
+                        self.waypoints = [pose]
+                        self.current_index = 0
+
+                        return
+
+                    # Otherwise → this was the final leg → run original cleanup
                     self.cmd_pub.publish(Twist())
                     self.state = "IDLE"
                     self.waypoints = []
