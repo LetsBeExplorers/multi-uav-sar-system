@@ -233,7 +233,7 @@
     
     <!-- Block 1 -->
     <model name="box_1">
-      <pose>-6 -6 0.5 0 0 0</pose>
+      <pose>-1 -1 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry>
@@ -250,7 +250,7 @@
 
     <!-- Block 2 -->
     <model name="box_2">
-      <pose>-2 2 0.5 0 0 0</pose>
+      <pose>-1 1 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry>
@@ -267,7 +267,7 @@
 
     <!-- Block 3 -->
     <model name="box_3">
-      <pose>6 6 0.5 0 0 0</pose>
+      <pose>1 -1 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry>
@@ -284,7 +284,7 @@
 
     <!-- Block 4 -->
     <model name="box_4">
-      <pose>14 14 0.5 0 0 0</pose>
+      <pose>1 1 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry>
