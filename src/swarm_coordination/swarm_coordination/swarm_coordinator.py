@@ -170,7 +170,7 @@ class SwarmCoordinator(Node):
 
     # Measures # of waypoints that exist on a path
     def waypoint_count_cb(self, msg):
-        self.num_waypoints = msg.data
+        self.num_waypoints += msg.data
 
     # ==============================
     # Core Logic
