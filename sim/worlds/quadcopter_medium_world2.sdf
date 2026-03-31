@@ -1,0 +1,367 @@
+<?xml version="1.0" ?>
+<sdf version="1.7">
+  <world name="quadcopter_medium_world2">
+
+    <!-- Physics -->
+    <physics type="ode"/>
+
+    <!-- Sky and ambient lighting -->
+    <scene>
+      <ambient>0.4 0.4 0.4 1</ambient>
+      <background>0.7 0.85 1 1</background>
+      <shadows>true</shadows>
+    </scene>
+
+    <!-- Sun -->
+    <light type="directional" name="sun">
+      <pose>0 0 50 0 0 0</pose>
+      <diffuse>1 1 1 1</diffuse>
+      <specular>1 1 1 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>-0.4 -0.2 -1</direction>
+      <cast_shadows>true</cast_shadows>
+    </light>
+
+    <!-- Ground plane -->
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>200 200</size>
+            </plane>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>200 200</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0.3 0.3 0.3 1</ambient>
+            <diffuse>0.35 0.35 0.35 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ===== Landing Pads ===== -->
+    <!-- UAV1 Pad (Red) -->
+    <model name="pad_x1">
+      <static>true</static>
+      <pose>-3 -11 0 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry>
+            <cylinder>
+              <radius>0.3</radius>
+              <length>0.05</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <ambient>1 0 0 1</ambient>
+            <diffuse>1 0 0 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- UAV2 Pad (Green) -->
+    <model name="pad_x2">
+      <static>true</static>
+      <pose>0 -11 0 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry>
+            <cylinder>
+              <radius>0.3</radius>
+              <length>0.05</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <ambient>0 1 0 1</ambient>
+            <diffuse>0 1 0 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- UAV3 Pad (Blue) -->
+    <model name="pad_x3">
+      <static>true</static>
+      <pose>3 -11 0 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry>
+            <cylinder>
+              <radius>0.3</radius>
+              <length>0.05</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <ambient>0 0 1 1</ambient>
+            <diffuse>0 0 1 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ===== UAVs ===== -->
+    <!-- UAV1 -->
+    <include>
+      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/X3 UAV</uri>
+      <name>x1</name>
+      <pose>-3 -11 0.5 0 0 0</pose>
+      <plugin filename="gz-sim-velocity-control-system"
+              name="gz::sim::systems::VelocityControl"/>
+
+      <plugin
+        filename="gz-sim-odometry-publisher-system"
+        name="gz::sim::systems::OdometryPublisher">
+        <dimensions>3</dimensions>
+      </plugin>
+    </include>
+
+    <!-- UAV2 -->
+    <include>
+      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/X3 UAV</uri>
+      <name>x2</name>
+      <pose>0 -11 0.5 0 0 0</pose>
+      <plugin filename="gz-sim-velocity-control-system"
+              name="gz::sim::systems::VelocityControl"/>
+
+      <plugin
+        filename="gz-sim-odometry-publisher-system"
+        name="gz::sim::systems::OdometryPublisher">
+        <dimensions>3</dimensions>
+      </plugin>
+    </include>
+
+    <!-- UAV3 -->
+    <include>
+      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/X3 UAV</uri>
+      <name>x3</name>
+      <pose>3 -11 0.5 0 0 0</pose>
+      <plugin filename="gz-sim-velocity-control-system"
+              name="gz::sim::systems::VelocityControl"/>
+
+      <plugin
+        filename="gz-sim-odometry-publisher-system"
+        name="gz::sim::systems::OdometryPublisher">
+        <dimensions>3</dimensions>
+      </plugin>
+    </include>
+
+    <model name="search_area_outline">
+      <static>true</static>  <!-- entire model is static -->
+
+      <!-- Bottom line -->
+      <link name="line_bottom">
+        <visual name="vis">
+          <geometry>
+            <box>
+              <size>20 0.1 0.05</size> <!-- 20m wide, thin -->
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 0 0 1</ambient>
+            <diffuse>1 0 0 1</diffuse>
+          </material>
+        </visual>
+        <pose>0 -10 0.01 0 0 0</pose>
+      </link>
+
+      <!-- Top line -->
+      <link name="line_top">
+        <visual name="vis">
+          <geometry>
+            <box>
+              <size>20 0.1 0.05</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 0 0 1</ambient>
+            <diffuse>1 0 0 1</diffuse>
+          </material>
+        </visual>
+        <pose>0 10 0.01 0 0 0</pose>
+      </link>
+
+      <!-- Left line -->
+      <link name="line_left">
+        <visual name="vis">
+          <geometry>
+            <box>
+              <size>0.1 20 0.05</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 0 0 1</ambient>
+            <diffuse>1 0 0 1</diffuse>
+          </material>
+        </visual>
+        <pose>-10 0 0.01 0 0 0</pose>
+      </link>
+
+      <!-- Right line -->
+      <link name="line_right">
+        <visual name="vis">
+          <geometry>
+            <box>
+              <size>0.1 20 0.05</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 0 0 1</ambient>
+            <diffuse>1 0 0 1</diffuse>
+          </material>
+        </visual>
+        <pose>10 0 0.01 0 0 0</pose>
+      </link>
+    </model>
+
+    <!-- ===== OBSTACLES ===== -->
+
+    <!-- Left vertical -->
+    <model name="box_1">
+      <pose>-3 -8 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box><size>1 1 1</size></box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box><size>1 1 1</size></box>
+          </geometry>
+        </visual>
+      </link>
+    </model>
+
+    <model name="box_2">
+      <pose>-3 -5 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box><size>1 1 1</size></box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box><size>1 1 1</size></box>
+          </geometry>
+        </visual>
+      </link>
+    </model>
+
+    <model name="box_3">
+      <pose>-3 -2 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box><size>1 1 1</size></box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box><size>1 1 1</size></box>
+          </geometry>
+        </visual>
+      </link>
+    </model>
+
+    <model name="box_4">
+      <pose>-3 2 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box><size>1 1 1</size></box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box><size>1 1 1</size></box>
+          </geometry>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Right vertical (offset) -->
+    <model name="box_5">
+      <pose>3 -2 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box><size>1 1 1</size></box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box><size>1 1 1</size></box>
+          </geometry>
+        </visual>
+      </link>
+    </model>
+
+    <model name="box_6">
+      <pose>3 2 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box><size>1 1 1</size></box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box><size>1 1 1</size></box>
+          </geometry>
+        </visual>
+      </link>
+    </model>
+
+    <model name="box_7">
+      <pose>3 5 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box><size>1 1 1</size></box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box><size>1 1 1</size></box>
+          </geometry>
+        </visual>
+      </link>
+    </model>
+
+    <model name="box_8">
+      <pose>3 8 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box><size>1 1 1</size></box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box><size>1 1 1</size></box>
+          </geometry>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ===== END OBSTACLES ===== -->
+
+  </world>
+</sdf>
