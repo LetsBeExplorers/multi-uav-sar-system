@@ -123,15 +123,17 @@ on_waypoint_count(msg):
   num_waypoints += msg.data
 
 check_coverage_events(coverage):
-  if current_mode == SEARCHING and all waypoints complete:
+  all_complete = visited_waypoints >= num_waypoints  // ← define it here
+
+  if current_mode == SEARCHING and all_complete:
     publish → /{uav_id}/fsm/event
     event: REGION_COMPLETE, value: coverage
 
-  elif current_mode == REFINING and all waypoints complete:
+  elif current_mode == REFINING and all_complete:
     publish → /{uav_id}/fsm/event
     event: REFINEMENT_COMPLETE, value: coverage
 
-  elif current_mode == ASSISTING and all waypoints complete:
+  elif current_mode == ASSISTING and all_complete:
     if all(v >= threshold for v in coverage_map.values()):
       publish → /{uav_id}/fsm/event
       event: ALL_DRONES_DONE
