@@ -1,257 +1,152 @@
-#!/usr/bin/env python3
+// SWARM COORDINATOR - swarm_coordinator.py
+// Spatial planner - owns region assignment, waypoint generation, coverage tracking
+// Takes direction from uav_state_manager via /uav/state
 
-import time
-import rclpy
-import os
-from rclpy.node import Node
-from std_msgs.msg import Empty, String, Int32
-from geometry_msgs.msg import Pose, PoseArray
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
-from datetime import datetime
+PARAMETERS:
+  uav_id        // e.g. "x1"
+  num_uavs      // total agents
+  area_bounds   // [xmin, xmax, ymin, ymax]
+  rows          // lawnmower row density
+  threshold     // coverage completeness threshold e.g. 0.95
 
+SUBSCRIPTIONS:
+  /uav/state                      → on_fsm_state_change()
+  /{uav_id}/nav/reached_waypoint  → on_waypoint_reached()
+  /{uav_id}/nav/waypoint_count    → on_waypoint_count()
+  /mission/coverage               → on_coverage_update()   // ← add this
 
-# Generates waypoints in coverage pattern
-def generate_lawnmower_waypoints(xmin, xmax, ymin, ymax, rows, x_start, x_end):
-    poses = []
+PUBLICATIONS:
+  /{uav_id}/nav/waypoints   → PoseArray (waypoints to navigation)
+  /{uav_id}/fsm/event       → FSMEvent.msg (coverage events to FSM)
+  /mission/status           → String (progress updates to dashboard)
 
-    height = ymax - ymin
-    row_height = height / max(rows - 1, 1)
+STATE:
+  current_mode = None       // mirrors FSM state, set by on_fsm_state_change
+  is_paused = False         // true when FSM is in VERIFYING
+  coverage_map = {}         // uav_id → coverage ratio, updated from /mission/coverage
+  visited_waypoints = 0
+  num_waypoints = 0
+  x_start = 0.0
+  x_end = 0.0
+  start_time = None
+  run_id = None
 
-    for row in range(rows):
-        y = ymin + row * row_height
-        x_positions = [x_start, x_end] if row % 2 == 0 else [x_end, x_start]
+INITIALIZATION:
+  compute uav_index from uav_id and num_uavs
+  compute assigned region:
+    slice_width = (xmax - xmin) / num_uavs
+    x_start = xmin + uav_index * slice_width
+    x_end = xmin + (uav_index + 1) * slice_width
+  init logging
 
-        for x in x_positions:
-            pose = Pose()
-            pose.position.x = x
-            pose.position.y = y
-            pose.position.z = 1.0
-            poses.append(pose)
+// ==============================
+// FSM Reaction
+// ==============================
 
-    return poses
+on_fsm_state_change(UAVState msg):
+  current_mode = msg.state
 
+  if current_mode == VERIFYING:
+    is_paused = True
+    return
 
-class SwarmCoordinator(Node):
-    def __init__(self):
+  is_paused = False
 
-        # ==============================
-        # Initialization
-        # ==============================
+  if current_mode == SEARCHING:
+    reset coverage metrics
+    start_time = now
+    publish_search_waypoints()
 
-        super().__init__('swarm_coordinator')
-        self.init_parameters()
-        self.init_state()
-        self.init_uav_mapping()
-        self.init_ros_interfaces()
-        self.init_logging()
+  elif current_mode == REFINING:
+    publish_refinement_waypoints()
 
-    # ==============================
-    # Initialization Helpers
-    # ==============================
+  elif current_mode == ASSISTING:
+    publish_assistive_waypoints()
 
-    def init_parameters(self):
-        self.declare_parameter('uav_id', 'x1')
-        self.declare_parameter('num_uavs', 3)
-        self.declare_parameter('area_bounds', [-10,10,-10,10])
-        self.declare_parameter('rows', 3)
+  elif current_mode == RETURNING or IDLE:
+    // stop generating waypoints, nothing to do
+    return
 
-        self.uav_id = self.get_parameter('uav_id').value
-        self.num_uavs = self.get_parameter('num_uavs').value
-        self.area = self.get_parameter('area_bounds').value
-        self.rows = self.get_parameter('rows').value
+// ==============================
+// Waypoint Generation
+// ==============================
 
-    def init_state(self):
-        self.state = "IDLE"
+publish_search_waypoints():
+  // standard lawnmower over assigned x slice, full y range
+  poses = generate_lawnmower_waypoints(
+    x_start, x_end, ymin, ymax, rows
+  )
+  publish → /{uav_id}/nav/waypoints
 
-        self.visited_waypoints = 0
-        self.num_waypoints = 0
-        self.x_start = 0.0
-        self.x_end = 0.0
-        self.start_time = None
+publish_refinement_waypoints():
+  // higher density pass or offset sweep over same region
+  // only if coverage < threshold
+  poses = generate_lawnmower_waypoints(
+    x_start, x_end, ymin, ymax, rows * 2  // denser
+  )
+  publish → /{uav_id}/nav/waypoints
 
-    def init_uav_mapping(self):
-        uav_ids = [f"x{i+1}" for i in range(self.num_uavs)]
-        self.uav_index = uav_ids.index(self.uav_id)
+publish_assistive_waypoints():
+  // find least covered region excluding self
+  target_id = uav_id with lowest coverage_map value, excluding self
+  target_index = parse index from target_id
+  
+  slice_width = (xmax - xmin) / num_uavs
+  target_x_start = xmin + target_index * slice_width
+  target_x_end = xmin + (target_index + 1) * slice_width
+  
+  poses = generate_lawnmower_waypoints(
+    target_x_start, target_x_end, ymin, ymax, rows
+  )
+  publish → /{uav_id}/nav/waypoints
 
-    def init_ros_interfaces(self):
-        # Mission control
-        self.create_subscription(Empty, '/mission/start', self.start_cb, 10)
-        self.create_subscription(Empty, '/mission/stop', self.stop_cb, 10)
+// ==============================
+// Coverage Tracking
+// ==============================
 
-        # Waypoint feedback
-        self.create_subscription(
-            Empty,
-            f'/{self.uav_id}/nav/reached_waypoint',
-            self.wp_cb,
-            10
-        )
+on_waypoint_reached():
+  if is_paused:
+    return   // don't update coverage while verifying
 
-        self.create_subscription(
-            Int32,
-            f'/{self.uav_id}/nav/waypoint_count',
-            self.waypoint_count_cb,
-            10
-        )
+  visited_waypoints += 1
+  coverage = visited_waypoints / num_waypoints
 
-        # Status publisher
-        self.status_pub = self.create_publisher(String, '/mission/status', 10)
+  // publish progress to dashboard every 10 waypoints
+  if visited_waypoints % 10 == 0:
+    publish → /mission/status
+    message: "[{uav_id}] PROGRESS: {visited_waypoints}/{num_waypoints}"
 
-        # Waypoint publisher
-        qos = QoSProfile(
-            depth=1,
-            reliability=ReliabilityPolicy.RELIABLE,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL
-        )
+  // check if we should tell FSM to transition
+  check_coverage_events(coverage)
 
-        topic = f'/{self.uav_id}/nav/waypoints'
-        self.publisher = self.create_publisher(PoseArray, topic, qos)
+on_waypoint_count(msg):
+  num_waypoints += msg.data
 
-        self.get_logger().debug(f"Coordinator ready for {self.uav_id}")
+check_coverage_events(coverage):
+  if current_mode == SEARCHING and all waypoints complete:
+    publish → /{uav_id}/fsm/event
+    event: REGION_COMPLETE, value: coverage
 
-    def init_logging(self):
-        self.timer = None
-        self.run_id = int(time.time())
-        self.results_file = f"results/{self.uav_id}_coordination-results.csv"
+  elif current_mode == REFINING and all waypoints complete:
+    publish → /{uav_id}/fsm/event
+    event: REFINEMENT_COMPLETE, value: coverage
 
-        # Add header to results file
-        if not os.path.exists(self.results_file):
-            with open(self.results_file, "w") as f:
-                f.write("run_id,timestamp,elapsed,state,num_waypoints,x_start,x_end,coverage\n")
+  elif current_mode == ASSISTING and all waypoints complete:
+    if all(v >= threshold for v in coverage_map.values()):
+      publish → /{uav_id}/fsm/event
+      event: ALL_DRONES_DONE
+    else:
+      publish → /{uav_id}/fsm/event
+      event: ASSIST_COMPLETE
 
-    # ==============================
-    # Callbacks
-    # ==============================
+on_coverage_update(MissionCoverage msg):
+  for i, uav_id in enumerate(msg.uav_ids):
+    coverage_map[uav_id] = msg.coverage_ratios[i]
 
-    # Starts the callback loop when it recieves commands
-    def start_cb(self, msg):
-        # Don't start if we are already started
-        if self.state != "IDLE":
-            return
+// ==============================
+// Logging
+// ==============================
 
-        # Reset metrics
-        self.visited_waypoints = 0
-        self.start_time = time.time()
-        self.run_id = int(time.time())
-
-        # Restart timer cleanly
-        if self.timer is not None:
-            self.destroy_timer(self.timer)
-
-        self.timer = self.create_timer(2.0, self.log_metrics)
-
-        # Update state
-        self.set_state("SEARCHING")
-        self.get_logger().debug("Mission START → publishing waypoints")
-
-        # Generate and send waypoints
-        self.publish_waypoints()
-
-        # Publish information to console
-        self.publish_status(f"[{self.uav_id}] AREA x:[{self.x_start:.1f},{self.x_end:.1f}] rows:{self.rows}")
-
-    # Sets state when emergency stop is initiated
-    def stop_cb(self, msg):
-        self.state = "IDLE"
-
-        # Stop logging timer
-        if self.timer is not None:
-            self.destroy_timer(self.timer)
-            self.timer = None
-
-    # Measures # of waypoints reached
-    def wp_cb(self, msg):
-        self.visited_waypoints += 1
-
-        # Only print every few waypoints to avoid spam
-        if self.visited_waypoints % 10 == 0 or self.visited_waypoints == self.num_waypoints:
-            self.publish_status(
-                f"[{self.uav_id}] PROGRESS: {self.visited_waypoints}/{self.num_waypoints}"
-            )
-
-    # Measures # of waypoints that exist on a path
-    def waypoint_count_cb(self, msg):
-        self.num_waypoints += msg.data
-
-    # ==============================
-    # Core Logic
-    # ==============================
-
-    # Defines the search area and sends the waypoints to navigation
-    def publish_waypoints(self):
-        xmin, xmax, ymin, ymax = self.area
-
-        slice_width = (xmax - xmin) / self.num_uavs
-
-        self.x_start = xmin + self.uav_index * slice_width
-        self.x_end = xmin + (self.uav_index + 1) * slice_width
-
-        poses = generate_lawnmower_waypoints(
-            xmin, xmax, ymin, ymax,
-            self.rows,
-            self.x_start, self.x_end
-        )
-
-        msg = PoseArray()
-        msg.header.frame_id = 'world'
-        msg.poses = poses
-
-        self.publisher.publish(msg)
-
-    # ==============================
-    # State / Messaging Helpers
-    # ==============================
-
-    # Publishes node/drone status
-    def publish_status(self, text):
-        msg = String()
-        msg.data = text
-        self.status_pub.publish(msg)
-
-    # Sets the drone state and sends it to be published in the proper format
-    def set_state(self, new_state):
-        if self.state == new_state:
-            return  # prevent spam
-
-        self.state = new_state
-        self.publish_status(f"[{self.uav_id}] {self.state}")
-
-    # ==============================
-    # Logging / Metrics
-    # ==============================
-
-    # Logs data
-    def log_metrics(self):
-        if self.start_time is None:
-            return
-
-        # How long the run took
-        elapsed = time.time() - self.start_time
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        # Measures coverage
-        coverage = (
-            min(self.visited_waypoints / self.num_waypoints, 1.0)
-            if self.num_waypoints > 0 else 0.0
-        )
-
-        # Stop Logging if reaches 100% coverage
-        if coverage >= 0.9999:
-            if self.timer is not None:
-                self.destroy_timer(self.timer)
-                self.timer = None
-            return
-
-        with open(self.results_file, "a") as f:
-            f.write(
-                f"{self.run_id},{timestamp},{elapsed:.2f},{self.state},{self.num_waypoints},{self.x_start},{self.x_end},{coverage:.2f}\n"
-            )
-
-def main(args=None):
-    rclpy.init(args=args)
-    node = SwarmCoordinator()
-    rclpy.spin(node)
-    rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()
+log_metrics():
+  // same as current implementation
+  // stop logging at 100% coverage
