@@ -16,7 +16,7 @@ class GazeboDriver(Node):
         self.cmd_in_topic = f'/{uav_name}/driver/cmd_vel'
         self.gz_cmd_topic = f'/model/{uav_name}/cmd_vel'
         self.gz_odom_topic = f'/model/{uav_name}/odometry'
-        self.state_topic = f'/{uav_name}/state/odom'
+        self.state_topic = f'/{uav_name}/state/pose'
 
         # Publishers: Gazebo and Platform
         self.cmd_pub = self.create_publisher(Twist, self.gz_cmd_topic, 10)
