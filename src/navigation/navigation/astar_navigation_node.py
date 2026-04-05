@@ -1,252 +1,122 @@
-import heapq
-from typing import Dict, List, Optional, Tuple
+// A* NAVIGATION NODE - astar_navigation_node.py
+// Path planning - queries world model for grid, plans collision-free paths
+// Replans when path is invalidated
 
-import rclpy
-import time
-import threading
-from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
-from geometry_msgs.msg import PoseArray, PoseStamped
-from nav_msgs.msg import Path, Odometry
-from std_msgs.msg import Empty, Int32, String
+PARAMETERS:
+  uav_id
+  replan_check_rate   // how often to check path validity e.g. 0.5 hz
 
+SUBSCRIPTIONS:
+  /{uav_id}/nav/waypoints   → on_waypoint_received()   // single Pose msg, from coordinator
+  /{uav_id}/state/pose      → on_pose_update()
 
-GridCell = Tuple[int, int]
+SERVICES (client):
+  /{uav_id}/world_model/get_grid  // call when planning or checking validity
 
+PUBLICATIONS:
+  /{uav_id}/nav/planned_path  → Path msg
+  /{uav_id}/fsm/event         → FSMEvent.msg (PATH_FAILED)
+  /mission/status             → String (metrics)
 
-class AStarNavigationNode(Node):
-    def __init__(self):
-        super().__init__('astar_navigation_node')
+STATE:
+  current_pose = None
+  current_goal = None
+  current_path = None
+  initial_plan_count = 0
+  replan_count = 0
+  path_failed_count = 0
 
-        # Parameters for easier integration later
-        self.declare_parameter('waypoint_topic', '/input_waypoints')
-        self.declare_parameter('path_topic', '/planned_path')
-        self.declare_parameter('uav_name', 'x1')
-        
-        self.uav = self.get_parameter('uav_name').value
-        waypoint_topic = f'/{self.uav}/nav/waypoints'
-        path_topic = f'/{self.uav}/nav/planned_path'
+// ==============================
+// Pose Tracking
+// ==============================
 
-        qos = QoSProfile(
-            depth=1,
-            reliability=ReliabilityPolicy.RELIABLE,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL
-        )
-        self.path_pub = self.create_publisher(Path, path_topic, qos)
+on_pose_update(msg):
+  current_pose = (msg.pose.pose.position.x, msg.pose.pose.position.y)
 
-        self.waypoint_sub = self.create_subscription(
-            PoseArray,
-            waypoint_topic,
-            self.waypoint_callback,
-            qos
-        )
+// ==============================
+// Waypoint Reception
+// ==============================
 
-        self.create_subscription(
-            Odometry,
-            f'/{self.uav}/state/odom',
-            self.odom_callback,
-            10
-        )
+on_waypoint_received(msg):
+  if current_pose is None:
+    return
 
-        # Publishes Mission Status and # of Waypoints
-        self.status_pub = self.create_publisher(String, '/mission/status', 10)
-        self.waypoint_count_pub = self.create_publisher(
-            Int32,
-            f'/{self.uav}/nav/waypoint_count',
-            10
-        )
+  current_goal = (msg.pose.position.x, msg.pose.position.y)
+  plan()
 
-        # Grid dimensions
-        self.width = 21
-        self.height = 21
-        self.grid = [[0 for _ in range(self.width)] for _ in range(self.height)]
+// ==============================
+// Planning
+// ==============================
 
-        # Initial static obstacles
-        self.obstacles = [
-            (2,2), (2,4),
-            (5,3), (5,5),
-            (3,1), (4,2), (3,3)
-        ]
+plan():
+  grid = call /{uav_id}/world_model/get_grid service
+  
+  if grid is None:
+    return  // service unavailable, wait
 
-        for x, y in self.obstacles:
-            gx, gy = self.world_to_grid(x, y)
-            self.grid[gy][gx] = 1
+  start = world_to_grid(current_pose)
+  goal = world_to_grid(current_goal)
+  path = astar(start, goal, grid)
 
-        # Waypoints received from topic
-        self.current_position = None
-        self.waypoints = []
-        self.started = False
+  if path is None:
+    path_failed_count += 1
+    publish → /{uav_id}/fsm/event
+    event: PATH_FAILED
+    log_metrics()
+    return
 
-    # Just grabs position of drone
-    def odom_callback(self, msg):
-        x = msg.pose.pose.position.x
-        y = msg.pose.pose.position.y
-        self.current_position = (x + 10, y + 10)
+  // track whether this is initial plan or replan
+  if current_path is None:
+    initial_plan_count += 1   // first time planning to this goal
+  // replan_count already incremented in check_path_validity before calling plan()
 
-    def world_to_grid(self, x, y):
-        return (x + 10, y + 10)
+  current_path = path
+  publish → /{uav_id}/nav/planned_path
+  log_metrics()
 
-    def waypoint_callback(self, msg: PoseArray):
-        if self.current_position is None:
-            return
+// ==============================
+// Path Validity Check
+// ==============================
 
-        waypoints = [
-            self.world_to_grid(
-                int(round(p.position.x)),
-                int(round(p.position.y))
-            )
-            for p in msg.poses
-        ]
+// runs on timer at replan_check_rate
+check_path_validity():
+  if current_path is None:
+    return
+  if current_goal is None:
+    return
 
-        start = (int(self.current_position[0]), int(self.current_position[1]))
-        full_path = []
+  grid = call /{uav_id}/world_model/get_grid service
 
-        for goal in waypoints:
-            partial = self.astar(start, goal)
-            if partial:
-                full_path.extend(partial)
-                start = goal
+  for each cell in current_path:
+    if grid[cell] == occupied:
+      current_path = None
+      replan_count += 1
+      plan()
+      return
 
-        if full_path:
-            path_msg = self.build_path_msg(full_path)
-            self.path_pub.publish(path_msg)
+// ==============================
+// Core Algorithm
+// ==============================
 
-            # Publish waypoint count to nodes
-            count_msg = Int32()
-            count_msg.data = len(full_path)
-            self.waypoint_count_pub.publish(count_msg)
+astar(start, goal, grid):
+  // same as current implementation
+  // just takes grid as parameter instead of using self.grid
 
-            # Publish waypoints to console
-            msg = String()
-            msg.data = f"[{self.uav}] WAYPOINTS: {len(full_path)}"
-            self.status_pub.publish(msg)
+// ==============================
+// Helpers
+// ==============================
 
-    def heuristic(self, a: GridCell, b: GridCell) -> int:
-        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+world_to_grid(world_x, world_y):
+  // same conversion as world model
+  // maybe worth sharing as a utility function later
 
-    def get_neighbors(self, cell: GridCell) -> List[GridCell]:
-        x, y = cell
-        candidates = [
-            (x + 1, y),
-            (x - 1, y),
-            (x, y + 1),
-            (x, y - 1),
-        ]
+build_path_msg(cells):
+  // same as current implementation
 
-        valid = []
-        for nx, ny in candidates:
-            if 0 <= nx < self.width and 0 <= ny < self.height:
-                if self.grid[ny][nx] == 0:
-                    valid.append((nx, ny))
-        return valid
+// ==============================
+// Metrics Logging
+// ==============================
 
-    def reconstruct_path(
-        self,
-        came_from: Dict[GridCell, GridCell],
-        current: GridCell
-    ) -> List[GridCell]:
-        path = [current]
-        while current in came_from:
-            current = came_from[current]
-            path.append(current)
-        path.reverse()
-        return path
-
-    def astar(self, start: GridCell, goal: GridCell) -> Optional[List[GridCell]]:
-        open_heap: List[Tuple[int, GridCell]] = []
-        heapq.heappush(open_heap, (0, start))
-
-        came_from: Dict[GridCell, GridCell] = {}
-        g_score: Dict[GridCell, int] = {start: 0}
-        f_score: Dict[GridCell, int] = {start: self.heuristic(start, goal)}
-
-        open_set = {start}
-
-        while open_heap:
-            _, current = heapq.heappop(open_heap)
-            open_set.discard(current)
-
-            if current == goal:
-                return self.reconstruct_path(came_from, current)
-
-            for neighbor in self.get_neighbors(current):
-                tentative_g = g_score[current] + 1
-
-                if neighbor not in g_score or tentative_g < g_score[neighbor]:
-                    came_from[neighbor] = current
-                    g_score[neighbor] = tentative_g
-                    f_score[neighbor] = tentative_g + self.heuristic(neighbor, goal)
-
-                    if neighbor not in open_set:
-                        heapq.heappush(open_heap, (f_score[neighbor], neighbor))
-                        open_set.add(neighbor)
-
-        return None
-
-    def build_path_msg(self, cells: List[GridCell]) -> Path:
-        path_msg = Path()
-        path_msg.header.stamp = self.get_clock().now().to_msg()
-        path_msg.header.frame_id = 'map'
-
-        for x, y in cells:
-            pose = PoseStamped()
-            pose.header = path_msg.header
-            pose.pose.position.x = float(x - 10)
-            pose.pose.position.y = float(y - 10)
-            pose.pose.position.z = 0.0
-            pose.pose.orientation.w = 1.0
-            path_msg.poses.append(pose)
-
-        return path_msg
-
-    def add_dynamic_obstacle(self):
-        dynamic_obstacles = [(7, 3), (7, 4), (7, 5)]
-
-        for x, y in dynamic_obstacles:
-            if 0 <= x < self.width and 0 <= y < self.height:
-                self.grid[y][x] = 1
-
-        self.get_logger().info(
-            f'Dynamic obstacle added at cells: {dynamic_obstacles}'
-        )
-
-    def reached_goal(self, goal):
-        # Convert grid back to world coords
-        goal_x = goal[0] - 10
-        goal_y = goal[1] - 10
-
-        current_x = self.current_position[0] - 10
-        current_y = self.current_position[1] - 10
-
-        dx = goal_x - current_x
-        dy = goal_y - current_y
-
-        dist = (dx**2 + dy**2) ** 0.5
-
-        return dist < 0.2 # tolerance
-
-    def compute_and_publish_full_path(self):
-        if not self.waypoints or self.current_position is None:
-            return
-        full_path = []
-        start = (int(self.current_position[0]), int(self.current_position[1]))
-        for idx in range(self.current_waypoint_index, len(self.waypoints)):
-            goal = self.waypoints[idx]
-            partial_path = self.astar(start, goal)
-            if partial_path:
-                full_path.extend(partial_path)
-                start = goal
-        if full_path:
-            path_msg = self.build_path_msg(full_path)
-            self.path_pub.publish(path_msg)
-
-def main(args=None):
-    rclpy.init(args=args)
-    node = AStarNavigationNode()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()
+log_metrics():
+  publish → /mission/status
+  message: "[{uav_id}] REPLANS: {replan_count} FAILURES: {path_failed_count}"
