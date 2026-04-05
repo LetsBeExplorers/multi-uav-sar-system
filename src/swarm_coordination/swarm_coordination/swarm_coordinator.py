@@ -10,10 +10,10 @@ PARAMETERS:
   threshold     // coverage completeness threshold e.g. 0.95
 
 SUBSCRIPTIONS:
-  /uav/state                      → on_fsm_state_change()
-  /{uav_id}/nav/reached_waypoint  → on_waypoint_reached()
-  /{uav_id}/nav/waypoint_count    → on_waypoint_count()
-  /mission/coverage               → on_coverage_update()   // ← add this
+  /uav/state                               → on_fsm_state_change()
+  /{uav_id}/nav/reached_coverage_waypoint  → on_waypoint_reached()
+  /{uav_id}/nav/waypoint_count             → on_waypoint_count()
+  /mission/coverage                        → on_coverage_update()
 
 PUBLICATIONS:
   /{uav_id}/nav/waypoints   → PoseArray (waypoints to navigation)
@@ -24,8 +24,8 @@ STATE:
   current_mode = None       // mirrors FSM state, set by on_fsm_state_change
   is_paused = False         // true when FSM is in VERIFYING
   coverage_map = {}         // uav_id → coverage ratio, updated from /mission/coverage
-  visited_waypoints = 0
-  num_waypoints = 0
+  coverage_waypoints_total = 0      // lawnmower points generated
+  coverage_waypoints_visited = 0    // lawnmower points reached
   x_start = 0.0
   x_end = 0.0
   start_time = None
@@ -108,22 +108,22 @@ on_waypoint_reached():
   if is_paused:
     return   // don't update coverage while verifying
 
-  visited_waypoints += 1
-  coverage = visited_waypoints / num_waypoints
+  coverage_waypoints_visited += 1
+  coverage = coverage_waypoints_visited / coverage_waypoints_total
 
   // publish progress to dashboard every 10 waypoints
-  if visited_waypoints % 10 == 0:
+  if coverage_waypoints_visited % 10 == 0:
     publish → /mission/status
-    message: "[{uav_id}] PROGRESS: {visited_waypoints}/{num_waypoints}"
+    message: "[{uav_id}] PROGRESS: {coverage_waypoints_visited}/{coverage_waypoints_total}"
 
   // check if we should tell FSM to transition
   check_coverage_events(coverage)
 
 on_waypoint_count(msg):
-  num_waypoints += msg.data
+  coverage_waypoints_total += msg.data
 
 check_coverage_events(coverage):
-  all_complete = visited_waypoints >= num_waypoints  // ← define it here
+  all_complete = coverage_waypoints_visited >= coverage_waypoints_total  // ← define it here
 
   if current_mode == SEARCHING and all_complete:
     publish → /{uav_id}/fsm/event
