@@ -1,232 +1,116 @@
-#!/usr/bin/env python3
+// PATH EXECUTOR - path_executor.py
+// Executes A* planned paths, tracks execution metrics
+// Publishes HOME_REACHED to FSM when home position reached
 
-import rclpy
-from rclpy.node import Node
-from std_msgs.msg import String, Empty
-from geometry_msgs.msg import Twist, Pose, PoseArray
-from nav_msgs.msg import Odometry, Path
-from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
-import time
-import math
+PARAMETERS:
+  uav_id
+  speed             // movement speed e.g. 2.0
+  waypoint_threshold // distance to consider waypoint reached e.g. 0.2
+  lookahead         // cells to look ahead on path e.g. 5
 
-class PathExecutor(Node):
+SUBSCRIPTIONS:
+  /{uav_id}/nav/planned_path  → on_path_received()
+  /{uav_id}/state/pose        → on_pose_update()
+  /mission/stop               → on_stop()
 
-    def __init__(self):
-        super().__init__('path_executor')
+PUBLICATIONS:
+  /{uav_id}/platform/cmd_vel          → Twist
+  /{uav_id}/nav/reached_coverage_waypoint  → Empty
+  /{uav_id}/fsm/event                 → FSMEvent.msg (HOME_REACHED)
 
-        # UAV name
-        self.declare_parameter('uav_name', 'x1')
-        uav = self.get_parameter('uav_name').value
-        self.uav_name = uav
+STATE:
+  current_path = []
+  current_index = 0
+  uav_x = 0.0
+  uav_y = 0.0
+  home_x = None
+  home_y = None
+  is_returning = False
+  path_cells_total = 0
+  path_cells_traversed = 0
 
-        # Publishers
-        self.cmd_pub = self.create_publisher(Twist, f'/{uav}/platform/cmd_vel', 10)
+INITIALIZATION:
+  init logging
+  create timer at 0.1s → move_step()
 
-        # QoS so we don't miss the waypoint message if it was sent before this node started
-        qos = QoSProfile(
-            depth=1,
-            reliability=ReliabilityPolicy.RELIABLE,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL
-        )
+// ==============================
+// Pose Tracking
+// ==============================
 
-        # Receives waypoint list
-        self.create_subscription(
-            Path,
-            f'/{uav}/nav/planned_path',
-            self.waypoint_callback,
-            qos
-        )
+on_pose_update(msg):
+  uav_x = msg.pose.pose.position.x
+  uav_y = msg.pose.pose.position.y
 
-        # Odometry subscription
-        self.create_subscription(
-            Odometry,
-            f'/{uav}/state/odom',
-            self.odom_callback,
-            10
-        )
+  // capture home position once
+  if home_x is None:
+    home_x = uav_x
+    home_y = uav_y
 
-        self.waypoint_pub = self.create_publisher(
-            PoseArray,
-            f'/{self.uav_name}/nav/waypoints',
-            qos
-        )
+// ==============================
+// Path Reception
+// ==============================
 
+on_path_received(msg):
+  current_path = [pose.pose for pose in msg.poses]
+  current_index = 0
+  path_cells_total += len(current_path)
 
-        self.reached_pub = self.create_publisher(
-            Empty,
-            f'/{self.uav_name}/nav/reached_waypoint',
-            10
-        )
+// ==============================
+// Execution
+// ==============================
 
-        # Internal state
-        self.waypoints = []
-        self.current_index = 0
-        self.state = "IDLE"
-        self.latest_path_msg = None
+move_step():
+  if current_path is empty:
+    stop()
+    return
 
-        # Initial fallback position (overwritten once odometry is received)
-        self.uav_x = 0.0
-        self.uav_y = 0.0
-        self.home_x = None
-        self.home_y = None
-        self.timer = self.create_timer(0.1, self.move_step)
+  target_index = min(current_index + lookahead, len(current_path) - 1)
+  target = current_path[target_index]
 
-        # Debug message and status to/from mission manager
-        self.get_logger().debug(f"Path Executor ready for {uav}")
-        self.status_pub = self.create_publisher(String, '/mission/status', 10)
-        self.create_subscription(Empty, '/mission/stop', self.stop_cb, 10)
+  dx = target.x - uav_x
+  dy = target.y - uav_y
+  dist = sqrt(dx² + dy²)
 
-    # Publishes node/drone status
-    def publish_status(self, text):
-        msg = String()
-        msg.data = text
-        self.status_pub.publish(msg)
+  if dist > 0:
+    publish → /{uav_id}/platform/cmd_vel
+    cmd: dx/dist * speed, dy/dist * speed
 
-    # Sets the drone state and sends it to be published in the proper format
-    def set_state(self, new_state):
-        if self.state == new_state:
-            return  # prevent spam
+  if dist < waypoint_threshold:
+    current_index += 1
+    path_cells_traversed += 1
+    publish → /{uav_id}/nav/reached_coverage_waypoint
 
-        self.state = new_state
-        self.publish_status(f"[{self.uav_name}] {self.state}")
+    if current_index >= len(current_path):
+      stop()
 
-    # Emergency stop
-    def stop_cb(self, msg):
-        self.waypoints = []
-        self.current_index = 0
-        self.latest_path_msg = None
+      if is_returning:
+        // reached home
+        is_returning = False
+        publish → /{uav_id}/fsm/event
+        event: HOME_REACHED
+        log_metrics()
+      
+      current_path = []
+      current_index = 0
 
-        self.cmd_pub.publish(Twist())
-        self.set_state("IDLE")
+stop():
+  publish → /{uav_id}/platform/cmd_vel
+  cmd: zero twist
 
-    # Update position from odometry
-    def odom_callback(self, msg):
-        self.uav_x = msg.pose.pose.position.x
-        self.uav_y = msg.pose.pose.position.y
+// ==============================
+// Stop Handler
+// ==============================
 
-        # Capture home position once
-        if self.home_x is None:
-            self.home_x = self.uav_x
-            self.home_y = self.uav_y
+on_stop():
+  current_path = []
+  current_index = 0
+  stop()
 
-    def start_path(self, msg):
-        # Initialize internal waypoint tracking
-        if msg.poses:
-            self.waypoints = [pose.pose for pose in msg.poses]
-            self.current_index = 0
-            if self.state != "RETURNING":
-                self.state = "EXECUTING"
-            self.get_logger().debug(f"Starting path with {len(self.waypoints)} waypoints")
+// ==============================
+// Logging
+// ==============================
 
-    # Store incoming waypoints from A*
-    def waypoint_callback(self, msg):
-        self.latest_path_msg = msg
-        self.start_path(msg)
-
-    def go_home(self):
-        if self.home_x is None:
-            return
-
-        self.set_state("RETURNING")
-
-        # Clear execution
-        self.waypoints = []
-        self.current_index = 0
-
-        # Ensure no old path interferes
-        self.latest_path_msg = None
-
-        # Send request
-        msg = PoseArray()
-        pose = Pose()
-        pose.position.x = self.home_x
-        pose.position.y = self.home_y + 1.0
-        msg.poses.append(pose)
-
-        self.get_logger().debug(f"GO_HOME publish: ({self.home_x}, {self.home_y})")
-        self.waypoint_pub.publish(msg)
-
-    # Move toward current waypoint using odometry feedback
-    def move_step(self):
-        if self.state == "IDLE":
-            self.cmd_pub.publish(Twist())
-            return
-
-        # Finished previous path, check if a new one is waiting
-        if not self.waypoints:
-            if self.latest_path_msg:
-                self.start_path(self.latest_path_msg)
-                self.latest_path_msg = None
-            else:
-                # Stop motion while waiting
-                self.cmd_pub.publish(Twist())
-                return
-
-        if self.current_index < len(self.waypoints):
-            lookahead = 5
-            target_index = min(self.current_index + lookahead, len(self.waypoints) - 1)
-            target = self.waypoints[target_index]
-            x, y = target.position.x, target.position.y
-
-            dx = x - self.uav_x
-            dy = y - self.uav_y
-
-            cmd = Twist()
-
-            dist = math.hypot(dx, dy)
-            SPEED = 2.0
-
-            if dist > 0:
-                cmd.linear.x = dx / dist * SPEED
-                cmd.linear.y = dy / dist * SPEED
-
-            self.cmd_pub.publish(cmd)
-
-            # Check if waypoint reached
-            if dist < 0.2:
-                self.current_index += 1
-                self.reached_pub.publish(Empty())
-
-                # Only hard stop at FINAL waypoint
-                if self.current_index >= len(self.waypoints):
-                    self.cmd_pub.publish(Twist())
-
-            # Reset once all waypoints are completed
-            if self.current_index >= len(self.waypoints):
-
-                # If returning, we're done for real
-                if self.state == "RETURNING":
-
-                    # If this was a multi-point path → it was the A* RETURNING path
-                    if len(self.waypoints) > 1:
-                        pose = Pose()
-                        pose.position.x = self.home_x
-                        pose.position.y = self.home_y
-
-                        self.waypoints = [pose]
-                        self.current_index = 0
-
-                        return
-
-                    # Otherwise → this was the final leg → run original cleanup
-                    self.cmd_pub.publish(Twist())
-                    self.set_state("IDLE")
-                    self.waypoints = []
-                    self.latest_path_msg = None
-                    self.current_index = 0
-                    return
-
-                # Otherwise, mission done → go home
-                self.publish_status(f"[{self.uav_name}] DONE")
-                self.latest_path_msg = None
-                self.go_home()
-                return
-
-def main(args=None):
-    rclpy.init(args=args)
-    node = PathExecutor()
-    rclpy.spin(node)
-    rclpy.shutdown()
-
-if __name__ == '__main__':
-    main()
+log_metrics():
+  completion_ratio = path_cells_traversed / path_cells_total if path_cells_total > 0 else 0.0
+  write to CSV:
+    uav_id, timestamp, path_cells_total, path_cells_traversed, completion_ratio
