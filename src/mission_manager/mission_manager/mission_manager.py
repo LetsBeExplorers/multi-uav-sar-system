@@ -1,182 +1,89 @@
-#!/usr/bin/env python3
+// MISSION MANAGER - mission_manager.py
+// Operator interface and mission aggregator
+// Owns start/stop commands, dashboard, and coverage aggregation
 
-import rclpy
-import time
-from rclpy.node import Node
-from std_msgs.msg import Empty, String
-import threading
-from rclpy.executors import ExternalShutdownException
+PARAMETERS:
+  num_uavs
+  threshold    // coverage completeness threshold, shared with coordinator
 
+SUBSCRIPTIONS:
+  /uav/state              → on_uav_state_change()
+  /mission/status         → on_status() // progress strings for dashboard
 
-class MissionManager(Node):
+PUBLICATIONS:
+  /mission/start          → Empty
+  /mission/stop           → Empty
+  /mission/coverage       → MissionCoverage.msg
 
-    def __init__(self):
-        super().__init__('mission_manager')
+STATE:
+  mission_state = IDLE                             // overall mission state
+  uav_states = {id: "IDLE" for id in uav_ids}      // uav_id → current FSM state
+  uav_coverage = {id: 0.0 for id in uav_ids}       // uav_id → coverage ratio
+  uav_ids = [f"x{i+1}" for i in range(num_uavs)]   // ordered list of uav ids
 
-        # Publishers (commands)
-        self.start_pub = self.create_publisher(Empty, '/mission/start', 10)
-        self.stop_pub = self.create_publisher(Empty, '/mission/stop', 10)
+// ==============================
+// State Tracking
+// ==============================
 
-        # Sets initial state and where to send status updates
-        self.state = "IDLE"
+on_uav_state_change(UAVState msg):
+  uav_states[msg.uav_id] = msg.state
+  
+  if all uav_states == IDLE:
+    mission_state = COMPLETE
 
-        # Dashboard Logic
-        self.uav_data = {}
-        self.mission_state = "[MISSION] IDLE"
+  refresh_dashboard()
 
-        # Subscriber (status/logs)
-        self.create_subscription(
-            String,
-            '/mission/status',
-            self.status_callback,
-            10
-        )
+on_status(String msg):
+  if "PROGRESS" in msg:
+    uav_id = parse_uav_id(msg)
+    visited, total = parse_progress(msg)
+    if total > 0:
+      uav_coverage[uav_id] = visited / total
+      publish_coverage()  // publish immediately on update
 
-        # Initialize completion variables and send debug message
-        self.done_uavs = set()
-        self.total_uavs = 3   # match your system
-        self.mission_complete = False
-        self.get_logger().debug("Mission Manager ready")
+  refresh_dashboard()
 
-    # Print incoming status messages
-    def status_callback(self, msg):
-        text = msg.data
+// ==============================
+// Coverage Aggregation
+// ==============================
 
-        # Determine if mission is complete
-        if "DONE" in text:
-            uav = text.split("]")[0] + "]"
-            self.done_uavs.add(uav)
+publish_coverage():
+  msg = MissionCoverage()
+  msg.uav_ids = uav_ids
+  msg.coverage_ratios = [uav_coverage.get(id, 0.0) for id in uav_ids]
+  msg.all_complete = all(r >= threshold for r in msg.coverage_ratios)
+  msg.timestamp = now
+  publish → /mission/coverage
 
-            if len(self.done_uavs) == self.total_uavs and not self.mission_complete:
-                self.mission_complete = True
-                self.mission_state = "[MISSION] COMPLETE"
+// ==============================
+// Dashboard
+// ==============================
 
-        # Dashboard data parsing
-        if text.startswith("[x"):
-            uav = text.split("]")[0][1:]  # "x1"
-            self.uav_data.setdefault(uav, {})
+refresh_dashboard():
+  clear screen
+  print mission_state
+  for each uav_id:
+    print uav_id, uav_states[uav_id], uav_coverage[uav_id]
+  print available commands
 
-            if "SEARCHING" in text:
-                self.uav_data[uav]["state"] = "SEARCHING"
+// ==============================
+// Operator Interface
+// ==============================
 
-            elif "RETURNING" in text:
-                self.uav_data[uav]["state"] = "RETURNING"
+send_start():
+  if mission_state != IDLE:
+    return
+  mission_state = RUNNING
+  uav_states = {id: "IDLE" for id in uav_ids}
+  uav_coverage = {id: 0.0 for id in uav_ids}
+  publish → /mission/start
 
-            elif "DONE" in text:
-                self.uav_data[uav]["state"] = "DONE"
+send_stop():
+  if mission_state == IDLE:
+    return
+  mission_state = STOPPED
+  publish → /mission/stop
 
-            elif "PROGRESS" in text:
-                prog = text.split("PROGRESS:")[1].strip()
-                self.uav_data[uav]["progress"] = prog
-
-            elif "WAYPOINTS" in text:
-                count = text.split(":")[-1].strip()
-                self.uav_data[uav]["waypoints"] = count
-
-            elif "AREA" in text:
-                self.uav_data[uav]["area"] = text.split("] ")[1]
-
-        self.print_dashboard()
-
-    def print_dashboard(self):
-        print("\033[H\033[J", end="")
-        print("=== MISSION STATUS ===")
-        print(self.mission_state)
-
-        # If mission hasn't started yet
-        if self.state != "RUNNING":
-            print("\nWaiting for start command...")
-            return
-
-        # If running but no data yet
-        if not self.uav_data:
-            print("\nInitializing UAVs...")
-            return
-
-        for uav in sorted(self.uav_data.keys()):
-            data = self.uav_data[uav]
-
-            state = data.get("state", "-")
-            prog = data.get("progress", "-")
-            wp = data.get("waypoints", "-")
-            area = data.get("area", "")
-
-            print(f"{uav} | {state:<10} | {prog:<10} | waypoints:{wp}")
-
-            if area:
-                print(f"   ↳ {area}")
-
-        print("\nCommands: start | stop | exit")
-
-    # Send start command
-    def send_start(self):
-        # Check to see if mission is already running
-        if self.state == "RUNNING":
-            print("Mission already running")
-            return
-        # If not, set state and clear completion status
-        self.state = "RUNNING"
-        self.done_uavs.clear()
-        self.mission_complete = False
-
-        # Send status
-        self.start_pub.publish(Empty())
-        self.mission_state = "[MISSION] RUNNING"
-        self.get_logger().debug("START sent")
-
-    # Send stop command
-    def send_stop(self):
-        # Check to see if mission is running
-        if self.state == "IDLE":
-            print("Mission not running")
-            return
-        # If not, set state
-        self.state = "STOPPED"
-        
-        # Send status
-        self.stop_pub.publish(Empty())
-        self.mission_state = "[MISSION] STOPPED"
-        self.get_logger().debug("STOP sent")
-
-# Background spin thread with exception handling to prevent shutdown errors
-def safe_spin(node):
-    try:
-        rclpy.spin(node)
-    except ExternalShutdownException:
-        pass
-
-def main():
-    rclpy.init()
-    node = MissionManager()
-
-    # Start ROS spinning in background
-    spin_thread = threading.Thread(target=safe_spin, args=(node,), daemon=True)
-    spin_thread.start()
-
-    print("Commands: start, stop, exit")
-
-    try:
-        while rclpy.ok():
-            cmd = input(">> ").strip().lower()
-
-            if cmd == "start":
-                node.send_start()
-
-            elif cmd == "stop":
-                node.send_stop()
-
-            elif cmd == "exit":
-                break
-
-            else:
-                print("Unknown command")
-
-    except KeyboardInterrupt:
-        pass
-
-    node.destroy_node()
-    rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()
+// FUTURE: send_mission_update() 
+//   would support mid-flight replanning and region reassignment
+//   requires MISSION_UPDATE event in FSM and coordinator reset logic
