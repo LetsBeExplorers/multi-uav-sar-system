@@ -14,9 +14,10 @@ PARAMETERS:
   static_obstacles   // list of (x,y) in world coords, loaded from params
 
 SUBSCRIPTIONS:
-  /{other_uav_id}/state/odom  → on_dynamic_obstacle_update()
+  /{other_uav_id}/state/pose  → on_dynamic_obstacle_update()
+  /{uav_id}/state/pose        → on_own_pose_update()
   // one subscription per other UAV
-  // e.g. x1 subscribes to /x2/state/odom and /x3/state/odom
+  // e.g. x1 subscribes to /x2/state/pose and /x3/state/pose
 
 SERVICES:
   /{uav_id}/world_model/get_grid  → get_occupancy_grid()
@@ -26,6 +27,7 @@ STATE:
   static_grid = 2D array   // separate record of static obstacles only
   dynamic_obstacles = {}   // world coords
   unknown_obstacles = {}   // FUTURE: (x,y) → timestamp
+  own_pose = None          // current position of this UAV
 
 INITIALIZATION:
   initialize grid as all free
@@ -61,6 +63,9 @@ mark_free(world_x, world_y):
     grid[gx][gy] = 0
   // note: don't clear inflated cells, only clear center
   // inflation is conservative - better to be safe
+
+on_own_pose_update(msg):
+  own_pose = (msg.pose.pose.position.x, msg.pose.pose.position.y)
 
 // ==============================
 // Dynamic Obstacles
