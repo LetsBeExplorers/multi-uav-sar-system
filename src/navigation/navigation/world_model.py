@@ -5,13 +5,14 @@
 PARAMETERS:
   uav_id
   num_uavs
-  grid_width         // cells
-  grid_height        // cells
-  resolution         // meters per cell
-  origin_x           // world coords of grid origin
+  grid_width           // cells
+  grid_height          // cells
+  resolution           // meters per cell
+  origin_x             // world coords of grid origin
   origin_y
-  inflation_radius   // cells to inflate around obstacles
-  static_obstacles   // list of (x,y) in world coords, loaded from params
+  inflation_radius     // cells to inflate around obstacles
+  static_obstacles     // list of (x,y) in world coords, loaded from params
+  collision_threshold  // meters e.g. 0.5m
 
 SUBSCRIPTIONS:
   /{other_uav_id}/state/pose  → on_dynamic_obstacle_update()
@@ -28,6 +29,7 @@ STATE:
   dynamic_obstacles = {}   // world coords
   unknown_obstacles = {}   // FUTURE: (x,y) → timestamp
   own_pose = None          // current position of this UAV
+  collision_count = 0
 
 INITIALIZATION:
   initialize grid as all free
@@ -75,7 +77,7 @@ on_dynamic_obstacle_update(uav_id, Odometry msg):
   x = msg.pose.pose.position.x
   y = msg.pose.pose.position.y
 
-  // clear previous position of this UAV
+  // clear previous position
   if uav_id in dynamic_obstacles:
     old_x, old_y = dynamic_obstacles[uav_id]
     clear_dynamic_obstacle(old_x, old_y)
@@ -83,6 +85,15 @@ on_dynamic_obstacle_update(uav_id, Odometry msg):
   // mark new position
   mark_occupied(x, y)
   dynamic_obstacles[uav_id] = (x, y)
+
+  // STUB: proximity-based collision detection
+  // works in sim, hardware requires ranging sensors
+  if own_pose is not None:
+    distance = euclidean distance between own_pose and (x, y)
+    if distance < collision_threshold:
+      collision_count += 1
+      publish → /{uav_id}/fsm/event
+      event: COLLISION_RISK
 
 clear_dynamic_obstacle(world_x, world_y):
   gx, gy = world_to_grid(world_x, world_y)
