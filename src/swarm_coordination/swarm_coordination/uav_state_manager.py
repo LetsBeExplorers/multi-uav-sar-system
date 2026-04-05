@@ -84,6 +84,8 @@ STATE MACHINE:
     if event == TARGET_LOST:
       transition(RETURNING)
       return
+    if event == HOME_REACHED:
+      transition(IDLE)  
 
 // SWARM COORDINATOR - separate node, reactive
 SUBSCRIPTIONS:
