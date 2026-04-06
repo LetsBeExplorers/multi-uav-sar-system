@@ -1,0 +1,7 @@
+---
+int8[] grid
+int32 width
+int32 height
+float32 resolution
+float32 origin_x
+float32 origin_y
