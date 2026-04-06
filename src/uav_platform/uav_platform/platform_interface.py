@@ -1,94 +1,75 @@
-import rclpy
-from rclpy.node import Node
-from std_msgs.msg import String
-from geometry_msgs.msg import Twist
+// PLATFORM INTERFACE - platform_interface.py
+// Safety layer between autonomy stack and hardware drivers
+// Responsibilities:
+//   - Clamp velocity commands to safe limits
+//   - Monitor hardware health and report issues to FSM
+//   - Single point of safety enforcement regardless of platform
+// NOT responsible for:
+//   - State translation (that's the driver's job)
+//   - Platform-specific communication (that's the driver's job)
 
-# Safety & Interface Layer between Autonomy and Hardware
-class PlatformInterface(Node):
+// DriverHealth.msg
+string status      // OK, COMMS_LOSS, LOW_BATTERY etc.
+float64 battery    // percentage
+float64 timestamp
 
-    def __init__(self):
-        super().__init__('platform_interface')
+PARAMETERS:
+  uav_name
+  max_linear_speed
+  max_vertical_speed
+  takeoff_velocity_threshold
+  landing_velocity_threshold
+  low_battery_threshold    // percentage e.g. 20%
 
-        # ===== Parameters =====
-        self.declare_parameters(
-            namespace='',
-            parameters=[
-                ('uav_name', 'x1'),
-                ('max_linear_speed', 3.0),
-                ('max_vertical_speed', 2.0),
-                ('takeoff_velocity_threshold', 0.3),
-                ('landing_velocity_threshold', -0.2),
-            ]
-        )
+SUBSCRIPTIONS:
+  /{uav_name}/platform/cmd_vel  → process_command()
+  /{uav_name}/driver/health     → on_health_update()  // driver reports hardware issues
 
-        # Retrieve parameter values
-        self.uav_name = self.get_parameter('uav_name').value
-        self.max_linear = self.get_parameter('max_linear_speed').value
-        self.max_vertical = self.get_parameter('max_vertical_speed').value
-        self.takeoff_thresh = self.get_parameter('takeoff_velocity_threshold').value
-        self.landing_thresh = self.get_parameter('landing_velocity_threshold').value
+PUBLICATIONS:
+  /{uav_name}/driver/cmd_vel    → Twist (safe clamped commands)
+  /{uav_name}/fsm/event         → FSMEvent.msg (LOW_BATTERY, COMMS_LOSS)
 
-        # Topics
-        self.cmd_in_topic = f'/{self.uav_name}/platform/cmd_vel'
-        self.driver_topic = f'/{self.uav_name}/driver/cmd_vel'
+STATE:
+  flight_state = GROUNDED   // GROUNDED or AIRBORNE
+  // hardware: read from Tello SDK
+  // sim: not available, stub only
 
-        # Publishers / Subscribers
-        self.cmd_pub = self.create_publisher(Twist, self.driver_topic, 10)
-        self.cmd_sub = self.create_subscription(
-            Twist,
-            self.cmd_in_topic,
-            self.process_command,
-            10
-        )
+// ==============================
+// Command Processing
+// ==============================
 
-        # Optional status publisher (for future safety alerts)
-        self.status_pub = self.create_publisher(String, '/mission/status', 10)
+process_command(msg):
+  safe_msg = Twist()
 
-        # Internal state (LOW-LEVEL)
-        self.state = "GROUNDED"
+  // clamp horizontal
+  safe_msg.linear.x = clamp(msg.linear.x, -max_linear, max_linear)
+  safe_msg.linear.y = clamp(msg.linear.y, -max_linear, max_linear)
 
-        self.get_logger().debug(f"PlatformInterface ready for {self.uav_name}")
+  // clamp vertical
+  safe_msg.linear.z = clamp(msg.linear.z, -max_vertical, max_vertical)
 
-    # Status publishing (unused for now)
-    def publish_status(self, text):
-        msg = String()
-        msg.data = text
-        self.status_pub.publish(msg)
+  // pass through yaw
+  safe_msg.angular.z = msg.angular.z
 
-    # Flight state detection (internal only)
-    def update_flight_state(self, vz):
+  update_flight_state(safe_msg.linear.z)
+  publish → /{uav_name}/driver/cmd_vel
 
-        if vz > self.takeoff_thresh and self.state != "AIRBORNE":
-            self.state = "AIRBORNE"
-            self.get_logger().debug("AIRBORNE")
+// ==============================
+// Flight State
+// ==============================
 
-        elif vz < self.landing_thresh and self.state != "GROUNDED":
-            self.state = "GROUNDED"
-            self.get_logger().debug("GROUNDED")
+update_flight_state(vz):
+  if vz > takeoff_threshold and flight_state != AIRBORNE:
+    flight_state = AIRBORNE
 
-    # Command processing
-    def process_command(self, msg):
+  elif vz < landing_threshold and flight_state != GROUNDED:
+    flight_state = GROUNDED
 
-        safe_msg = Twist()
+on_health_update(msg):
+  if msg.status == COMMS_LOSS:
+    publish → /{uav_name}/fsm/event
+    event: COMMS_LOSS
 
-        # Clamp horizontal velocity
-        safe_msg.linear.x = max(min(msg.linear.x, self.max_linear), -self.max_linear)
-        safe_msg.linear.y = max(min(msg.linear.y, self.max_linear), -self.max_linear)
-
-        # Clamp vertical velocity
-        safe_msg.linear.z = max(min(msg.linear.z, self.max_vertical), -self.max_vertical)
-
-        # Pass through yaw
-        safe_msg.angular.z = msg.angular.z
-
-        # Update internal state
-        self.update_flight_state(safe_msg.linear.z)
-
-        # Publish safe command
-        self.cmd_pub.publish(safe_msg)
-
-def main(args=None):
-    rclpy.init(args=args)
-    node = PlatformInterface()
-    rclpy.spin(node)
-    rclpy.shutdown()
+  if msg.battery < low_battery_threshold:
+    publish → /{uav_name}/fsm/event
+    event: LOW_BATTERY
