@@ -1,53 +1,39 @@
-import rclpy
-from rclpy.node import Node
-from geometry_msgs.msg import Twist
-from nav_msgs.msg import Odometry
+// GAZEBO DRIVER - gazebo_driver.py
+// Sim-specific driver
+// Translates between Gazebo and ROS system
 
-class GazeboDriver(Node):
+PARAMETERS:
+  uav_name
 
-    def __init__(self):
-        super().__init__('gazebo_driver')
+SUBSCRIPTIONS:
+  /{uav_name}/driver/cmd_vel      → forward_command()
+  /model/{uav_name}/odometry      → forward_state()
 
-        # Parameters
-        self.declare_parameter('uav_name', 'x1')
-        uav_name = self.get_parameter('uav_name').value
+PUBLICATIONS:
+  /model/{uav_name}/cmd_vel       → Twist
+  /{uav_name}/state/pose          → Odometry
+  /{uav_name}/driver/health       → DriverHealth.msg
 
-        # Topics
-        self.cmd_in_topic = f'/{uav_name}/driver/cmd_vel'
-        self.gz_cmd_topic = f'/model/{uav_name}/cmd_vel'
-        self.gz_odom_topic = f'/model/{uav_name}/odometry'
-        self.state_topic = f'/{uav_name}/state/pose'
+// ==============================
+// Command Passthrough
+// ==============================
+forward_command(msg):
+  publish → /model/{uav_name}/cmd_vel
 
-        # Publishers: Gazebo and Platform
-        self.cmd_pub = self.create_publisher(Twist, self.gz_cmd_topic, 10)
-        self.state_pub = self.create_publisher(Odometry, self.state_topic, 10)
+// ==============================
+// State Reporting
+// ==============================
+forward_state(msg):
+  publish → /{uav_name}/state/pose
+  publish_health()
 
-        # Subscribers from Gazebo and Platform Interface
-        self.cmd_sub = self.create_subscription(
-            Twist,
-            self.cmd_in_topic,
-            self.forward_command,
-            10
-        )
+// ==============================
+// Health Reporting
+// ==============================
+// called from forward_state since they're naturally coupled
 
-        self.odom_sub = self.create_subscription(
-            Odometry,
-            self.gz_odom_topic,
-            self.forward_state,
-            10
-        )
-
-        # Debug message
-        self.get_logger().debug(f"GazeboDriver ready for UAV: {uav_name}")
-
-    def forward_command(self, msg):
-        self.cmd_pub.publish(msg)
-
-    def forward_state(self, msg):
-        self.state_pub.publish(msg)
-
-def main(args=None):
-    rclpy.init(args=args)
-    node = GazeboDriver()
-    rclpy.spin(node)
-    rclpy.shutdown()
+publish_health():
+  health.status = "OK"
+  health.battery = 100.0  // stubbed in sim
+  health.timestamp = now
+  publish → /{uav_name}/driver/health
