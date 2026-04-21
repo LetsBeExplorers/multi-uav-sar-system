@@ -1,9 +1,10 @@
 import threading
+
 import rclpy
-from rclpy.node import Node
 from rclpy.executors import ExternalShutdownException
-from std_msgs.msg import Empty, String
+from rclpy.node import Node
 from sar_msgs.msg import MissionCoverage, UAVState
+from std_msgs.msg import Empty, String
 
 
 class MissionManager(Node):

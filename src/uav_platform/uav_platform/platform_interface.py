@@ -1,6 +1,6 @@
+from geometry_msgs.msg import Twist
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist
 from sar_msgs.msg import DriverHealth, FSMEvent
 
 
@@ -37,8 +37,10 @@ class PlatformInterface(Node):
         self._event_pub = self.create_publisher(FSMEvent, f'/{self.uav_name}/fsm/event', 10)
 
         # ===== Subscribers =====
-        self.create_subscription(Twist, f'/{self.uav_name}/platform/cmd_vel', self._process_command, 10)
-        self.create_subscription(DriverHealth, f'/{self.uav_name}/driver/health', self._on_health_update, 10)
+        self.create_subscription(
+            Twist, f'/{self.uav_name}/platform/cmd_vel', self._process_command, 10)
+        self.create_subscription(
+            DriverHealth, f'/{self.uav_name}/driver/health', self._on_health_update, 10)
 
         self.get_logger().debug(f'PlatformInterface ready for {self.uav_name}')
 
