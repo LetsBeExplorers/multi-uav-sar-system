@@ -1,116 +1,227 @@
-// PATH EXECUTOR - path_executor.py
-// Executes A* planned paths, tracks execution metrics
-// Publishes HOME_REACHED to FSM when home position reached
+import csv
+import math
+import os
+from datetime import datetime, timezone
 
-PARAMETERS:
-  uav_id
-  speed             // movement speed e.g. 2.0
-  waypoint_threshold // distance to consider waypoint reached e.g. 0.2
-  lookahead         // cells to look ahead on path e.g. 5
+from geometry_msgs.msg import Pose, PoseArray, Twist
+from nav_msgs.msg import Odometry, Path
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from sar_msgs.msg import FSMEvent
+from std_msgs.msg import Empty, String
 
-SUBSCRIPTIONS:
-  /{uav_id}/nav/planned_path  → on_path_received()
-  /{uav_id}/state/pose        → on_pose_update()
-  /mission/stop               → on_stop()
 
-PUBLICATIONS:
-  /{uav_id}/platform/cmd_vel          → Twist
-  /{uav_id}/nav/reached_coverage_waypoint  → Empty
-  /{uav_id}/fsm/event                 → FSMEvent.msg (HOME_REACHED)
+class PathExecutorNode(Node):
 
-STATE:
-  current_path = []
-  current_index = 0
-  uav_x = 0.0
-  uav_y = 0.0
-  home_x = None
-  home_y = None
-  is_returning = False
-  path_cells_total = 0
-  path_cells_traversed = 0
+    def __init__(self):
+        super().__init__('path_executor')
 
-INITIALIZATION:
-  init logging
-  create timer at 0.1s → move_step()
+        # ===== Parameters =====
+        self.declare_parameters(
+            namespace='',
+            parameters=[
+                ('uav_id', 'x1'),
+                ('speed', 2.0),
+                ('waypoint_threshold', 0.2),
+                ('lookahead', 5),
+            ]
+        )
 
-// ==============================
-// Pose Tracking
-// ==============================
+        self.uav_id = self.get_parameter('uav_id').value
+        self.speed = self.get_parameter('speed').value
+        self.waypoint_threshold = self.get_parameter('waypoint_threshold').value
+        self.lookahead = self.get_parameter('lookahead').value
 
-on_pose_update(msg):
-  uav_x = msg.pose.pose.position.x
-  uav_y = msg.pose.pose.position.y
+        # ===== State =====
+        self.current_path = []       # list of (x, y) tuples from A* planned path
+        self.current_index = 0
+        self.uav_x = 0.0
+        self.uav_y = 0.0
+        self.home_x = None
+        self.home_y = None
+        self.is_returning = False
+        self.path_cells_total = 0
+        self.path_cells_traversed = 0
 
-  // capture home position once
-  if home_x is None:
-    home_x = uav_x
-    home_y = uav_y
+        qos_transient = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL
+        )
 
-// ==============================
-// Path Reception
-// ==============================
+        # ===== Publishers =====
+        self._cmd_pub = self.create_publisher(
+            Twist, f'/{self.uav_id}/platform/cmd_vel', 10)
+        self._reached_pub = self.create_publisher(
+            Empty, f'/{self.uav_id}/nav/reached_coverage_waypoint', 10)
+        self._event_pub = self.create_publisher(
+            FSMEvent, f'/{self.uav_id}/fsm/event', 10)
+        # go_home() publishes a single-pose PoseArray back into A* for return planning
+        self._waypoint_pub = self.create_publisher(
+            PoseArray, f'/{self.uav_id}/nav/waypoints', qos_transient)
+        self._status_pub = self.create_publisher(String, '/mission/status', 10)
 
-on_path_received(msg):
-  current_path = [pose.pose for pose in msg.poses]
-  current_index = 0
-  path_cells_total += len(current_path)
+        # ===== Subscribers =====
+        self.create_subscription(
+            Path,
+            f'/{self.uav_id}/nav/planned_path',
+            self._on_path_received,
+            qos_transient
+        )
+        self.create_subscription(
+            Odometry,
+            f'/{self.uav_id}/state/odom',
+            self._on_pose_update,
+            10
+        )
+        self.create_subscription(
+            Empty,
+            f'/{self.uav_id}/nav/go_home',
+            self._on_go_home,
+            10
+        )
+        self.create_subscription(
+            Empty,
+            '/mission/stop',
+            self._on_stop,
+            10
+        )
 
-// ==============================
-// Execution
-// ==============================
+        # ===== Timer =====
+        self.create_timer(0.1, self._move_step)
 
-move_step():
-  if current_path is empty:
-    stop()
-    return
+        self.get_logger().debug(f'PathExecutorNode ready for {self.uav_id}')
 
-  target_index = min(current_index + lookahead, len(current_path) - 1)
-  target = current_path[target_index]
+    # ===== Pose Tracking =====
 
-  dx = target.x - uav_x
-  dy = target.y - uav_y
-  dist = sqrt(dx² + dy²)
+    def _on_pose_update(self, msg):
+        self.uav_x = msg.pose.pose.position.x
+        self.uav_y = msg.pose.pose.position.y
 
-  if dist > 0:
-    publish → /{uav_id}/platform/cmd_vel
-    cmd: dx/dist * speed, dy/dist * speed
+        if self.home_x is None:
+            self.home_x = self.uav_x
+            self.home_y = self.uav_y
 
-  if dist < waypoint_threshold:
-    current_index += 1
-    path_cells_traversed += 1
-    publish → /{uav_id}/nav/reached_coverage_waypoint
+    # ===== Path Reception =====
 
-    if current_index >= len(current_path):
-      stop()
+    def _on_path_received(self, msg):
+        if not msg.poses:
+            return
+        self.current_path = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
+        self.current_index = 0
+        self.path_cells_total += len(self.current_path)
 
-      if is_returning:
-        // reached home
-        is_returning = False
-        publish → /{uav_id}/fsm/event
-        event: HOME_REACHED
-        log_metrics()
-      
-      current_path = []
-      current_index = 0
+    # ===== Execution =====
 
-stop():
-  publish → /{uav_id}/platform/cmd_vel
-  cmd: zero twist
+    def _move_step(self):
+        if not self.current_path:
+            self._stop()
+            return
 
-// ==============================
-// Stop Handler
-// ==============================
+        # steer toward lookahead point for smooth motion
+        target_index = min(self.current_index + self.lookahead, len(self.current_path) - 1)
+        tx, ty = self.current_path[target_index]
+        dx = tx - self.uav_x
+        dy = ty - self.uav_y
+        dist = math.hypot(dx, dy)
 
-on_stop():
-  current_path = []
-  current_index = 0
-  stop()
+        cmd = Twist()
+        if dist > 0:
+            cmd.linear.x = dx / dist * self.speed
+            cmd.linear.y = dy / dist * self.speed
+        self._cmd_pub.publish(cmd)
 
-// ==============================
-// Logging
-// ==============================
+        # advance index when close enough to the current (non-lookahead) cell
+        cx, cy = self.current_path[self.current_index]
+        if math.hypot(cx - self.uav_x, cy - self.uav_y) < self.waypoint_threshold:
+            self.current_index += 1
+            self.path_cells_traversed += 1
 
-log_metrics():
-  completion_ratio = path_cells_traversed / path_cells_total if path_cells_total > 0 else 0.0
-  write to CSV:
-    uav_id, timestamp, path_cells_total, path_cells_traversed, completion_ratio
+            if self.current_index >= len(self.current_path):
+                self._stop()
+                # signal A* that a coverage waypoint segment is complete
+                self._reached_pub.publish(Empty())
+
+                if self.is_returning:
+                    self.is_returning = False
+                    event = FSMEvent()
+                    event.uav_id = self.uav_id
+                    event.event = 'HOME_REACHED'
+                    event.timestamp = self.get_clock().now().nanoseconds / 1e9
+                    self._event_pub.publish(event)
+                    self._log_metrics()
+
+                self.current_path = []
+                self.current_index = 0
+
+    def _stop(self):
+        self._cmd_pub.publish(Twist())
+
+    # ===== Home Return =====
+
+    def go_home(self):
+        """Send home position as a single-waypoint PoseArray so A* plans the return path."""
+        if self.home_x is None:
+            return
+        self.is_returning = True
+        self.current_path = []
+        self.current_index = 0
+
+        msg = PoseArray()
+        pose = Pose()
+        pose.position.x = float(self.home_x)
+        pose.position.y = float(self.home_y)
+        pose.orientation.w = 1.0
+        msg.poses.append(pose)
+        self._waypoint_pub.publish(msg)
+
+        self.get_logger().info(
+            f'[{self.uav_id}] returning home ({self.home_x:.1f}, {self.home_y:.1f})')
+
+    def _on_go_home(self, msg):
+        self.go_home()
+
+    # ===== Stop Handler =====
+
+    def _on_stop(self, msg):
+        self.current_path = []
+        self.current_index = 0
+        self.is_returning = False
+        self._stop()
+
+    # ===== Metrics =====
+
+    def _log_metrics(self):
+        ratio = (self.path_cells_traversed / self.path_cells_total
+                 if self.path_cells_total > 0 else 0.0)
+        log_dir = os.path.expanduser('~/.ros/path_metrics')
+        os.makedirs(log_dir, exist_ok=True)
+        csv_path = os.path.join(log_dir, f'{self.uav_id}_path_metrics.csv')
+        write_header = not os.path.exists(csv_path)
+        with open(csv_path, 'a', newline='') as f:
+            writer = csv.writer(f)
+            if write_header:
+                writer.writerow([
+                    'uav_id', 'timestamp', 'path_cells_total',
+                    'path_cells_traversed', 'completion_ratio',
+                ])
+            writer.writerow([
+                self.uav_id,
+                datetime.now(timezone.utc).isoformat(),
+                self.path_cells_total,
+                self.path_cells_traversed,
+                f'{ratio:.4f}',
+            ])
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = PathExecutorNode()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
