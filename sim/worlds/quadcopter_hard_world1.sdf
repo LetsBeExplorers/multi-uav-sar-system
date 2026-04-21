@@ -5,6 +5,11 @@
     <!-- Physics -->
     <physics type="ode"/>
 
+    <!-- Required for GPU lidar sensor -->
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+
     <!-- Sky and ambient lighting -->
     <scene>
       <ambient>0.4 0.4 0.4 1</ambient>
@@ -118,7 +123,7 @@
     <!-- ===== UAVs ===== -->
     <!-- UAV1 -->
     <include>
-      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/X3 UAV</uri>
+      <uri>file:///home/raytracer/projects/DASE4460/multi-uav-sar-system/sim/models/x3_lidar</uri>
       <name>x1</name>
       <pose>-3 -11 0.5 0 0 0</pose>
       <plugin filename="gz-sim-velocity-control-system"
@@ -133,7 +138,7 @@
 
     <!-- UAV2 -->
     <include>
-      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/X3 UAV</uri>
+      <uri>file:///home/raytracer/projects/DASE4460/multi-uav-sar-system/sim/models/x3_lidar</uri>
       <name>x2</name>
       <pose>0 -11 0.5 0 0 0</pose>
       <plugin filename="gz-sim-velocity-control-system"
@@ -148,7 +153,7 @@
 
     <!-- UAV3 -->
     <include>
-      <uri>https://fuel.gazebosim.org/1.0/openrobotics/models/X3 UAV</uri>
+      <uri>file:///home/raytracer/projects/DASE4460/multi-uav-sar-system/sim/models/x3_lidar</uri>
       <name>x3</name>
       <pose>3 -11 0.5 0 0 0</pose>
       <plugin filename="gz-sim-velocity-control-system"

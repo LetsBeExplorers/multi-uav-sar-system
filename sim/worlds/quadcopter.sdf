@@ -5,6 +5,11 @@
     <!-- Physics -->
     <physics type="ode"/>
 
+    <!-- Required for GPU lidar sensor -->
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+
     <!-- Sky and ambient lighting -->
     <scene>
       <ambient>0.4 0.4 0.4 1</ambient>
@@ -56,7 +61,7 @@
 
       <!-- Quadcopter -->
       <include>
-        <uri>file:///home/raytracer/.gz/fuel/fuel.gazebosim.org/openrobotics/models/x3 uav/4</uri>
+        <uri>file:///home/raytracer/projects/DASE4460/multi-uav-sar-system/sim/models/x3_lidar</uri>
 
         <name>x1</name>
         <pose>0 0 0.5 0 0 0</pose>
