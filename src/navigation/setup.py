@@ -25,7 +25,8 @@ setup(
     entry_points={
         'console_scripts': [
             'path_executor = navigation.path_executor:main',
-            'astar_navigation_node = navigation.astar_navigation_node:main',       
+            'astar_navigation_node = navigation.astar_navigation_node:main',
+            'world_model = navigation.world_model:main',
         ],
     },
 )
