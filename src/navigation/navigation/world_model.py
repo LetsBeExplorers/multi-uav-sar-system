@@ -41,7 +41,8 @@ class WorldModelNode(Node):
         self.collision_threshold = self.get_parameter('collision_threshold').value
 
         # ===== State =====
-        self.grid = [[0] * self.grid_width for _ in range(self.grid_height)]
+        # -1 = unknown, 0 = free, 1 = occupied
+        self.grid = [[-1] * self.grid_width for _ in range(self.grid_height)]
         self.static_grid = [[0] * self.grid_width for _ in range(self.grid_height)]
         self.dynamic_obstacles = {}
         self.own_pose = None
@@ -129,7 +130,7 @@ class WorldModelNode(Node):
             for dy in range(-r, r + 1):
                 nx, ny = gx + dx, gy + dy
                 if self._in_bounds(nx, ny) and self.static_grid[ny][nx] == 0:
-                    self.grid[ny][nx] = 0
+                    self.grid[ny][nx] = -1
 
     # ===== Sensor-Based Updates =====
 
