@@ -8,7 +8,7 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sar_msgs.msg import FSMEvent
 from sar_msgs.srv import GetOccupancyGrid
-from std_msgs.msg import String
+from std_msgs.msg import Empty, String
 
 GridCell = Tuple[int, int]
 
@@ -32,8 +32,9 @@ class AStarNavigationNode(Node):
 
         # ===== State =====
         self.current_pose = None
-        self.current_goal = None
-        self.current_path = None
+        self.waypoints = []       # world-coord list from coordinator
+        self.waypoint_index = 0   # which waypoint we're currently heading to
+        self.current_path = None  # active A* path to current waypoint
         self.initial_plan_count = 0
         self.replan_count = 0
         self.path_failed_count = 0
@@ -64,6 +65,13 @@ class AStarNavigationNode(Node):
             self._on_pose_update,
             10
         )
+        # path executor signals when the current waypoint is reached
+        self.create_subscription(
+            Empty,
+            f'/{self.uav_id}/nav/reached_coverage_waypoint',
+            self._on_waypoint_reached,
+            10
+        )
 
         # ===== Service Client =====
         self._grid_client = self.create_client(
@@ -90,24 +98,43 @@ class AStarNavigationNode(Node):
         if not msg.poses:
             return
 
-        # store last waypoint as the overall goal (for replan reference)
-        last = msg.poses[-1]
-        self.current_goal = (last.position.x, last.position.y)
+        self.waypoints = [(p.position.x, p.position.y) for p in msg.poses]
+        self.waypoint_index = 0
         self.current_path = None
+        self._plan()
 
-        self._plan(msg.poses)
+    def _on_waypoint_reached(self, msg):
+        self.waypoint_index += 1
+        if self.waypoint_index >= len(self.waypoints):
+            self.get_logger().info(f'[{self.uav_id}] waypoint sequence complete')
+            self.waypoints = []
+            self.current_path = None
+            return
+        self.current_path = None
+        self._plan()
 
     # ===== Planning =====
 
     def _get_grid(self):
-        if not self._grid_client.wait_for_service(timeout_sec=1.0):
+        if not self._grid_client.wait_for_service(timeout_sec=0.1):
             self.get_logger().warn('world_model service unavailable')
             return None
         future = self._grid_client.call_async(GetOccupancyGrid.Request())
-        rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
+        # spin in a fresh executor so this works from inside a callback
+        executor = rclpy.executors.SingleThreadedExecutor()
+        executor.add_node(self)
+        try:
+            executor.spin_until_future_complete(future, timeout_sec=2.0)
+        finally:
+            executor.remove_node(self)
         return future.result() if future.done() else None
 
-    def _plan(self, poses):
+    def _plan(self):
+        if not self.waypoints or self.current_pose is None:
+            return
+        if self.waypoint_index >= len(self.waypoints):
+            return
+
         resp = self._get_grid()
         if resp is None:
             return
@@ -125,70 +152,7 @@ class AStarNavigationNode(Node):
             )
 
         start = w2g(*self.current_pose)
-        waypoints = [w2g(p.position.x, p.position.y) for p in poses]
-
-        # chain A* through every waypoint
-        full_path = []
-        seg_start = start
-        for goal in waypoints:
-            segment = self._astar(seg_start, goal, grid_flat, width)
-            if segment is None:
-                self.path_failed_count += 1
-                event = FSMEvent()
-                event.uav_id = self.uav_id
-                event.event = 'PATH_FAILED'
-                event.timestamp = self.get_clock().now().nanoseconds / 1e9
-                self._event_pub.publish(event)
-                self._log_metrics()
-                return
-            full_path.extend(segment)
-            seg_start = goal
-
-        if self.current_path is None:
-            self.initial_plan_count += 1
-
-        self.current_path = full_path
-        self._path_pub.publish(self._build_path_msg(full_path, origin_x, origin_y, resolution))
-        self._log_metrics()
-
-    # ===== Path Validity Check =====
-
-    def _check_path_validity(self):
-        if self.current_path is None or self.current_goal is None:
-            return
-
-        resp = self._get_grid()
-        if resp is None:
-            return
-
-        width = resp.width
-        grid_flat = resp.grid
-
-        for gx, gy in self.current_path:
-            if grid_flat[gy * width + gx] != 0:
-                self.current_path = None
-                self.replan_count += 1
-                self._replan_to_goal(resp)
-                return
-
-    def _replan_to_goal(self, resp):
-        if self.current_goal is None or self.current_pose is None:
-            return
-
-        width = resp.width
-        grid_flat = resp.grid
-        origin_x = resp.origin_x
-        origin_y = resp.origin_y
-        resolution = resp.resolution
-
-        def w2g(wx, wy):
-            return (
-                int((wx - origin_x) / resolution),
-                int((wy - origin_y) / resolution)
-            )
-
-        start = w2g(*self.current_pose)
-        goal = w2g(*self.current_goal)
+        goal = w2g(*self.waypoints[self.waypoint_index])
         path = self._astar(start, goal, grid_flat, width)
 
         if path is None:
@@ -201,10 +165,32 @@ class AStarNavigationNode(Node):
             self._log_metrics()
             return
 
+        if self.current_path is None:
+            self.initial_plan_count += 1
+
         self.current_path = path
-        self._path_pub.publish(
-            self._build_path_msg(path, origin_x, origin_y, resolution))
+        self._path_pub.publish(self._build_path_msg(path, origin_x, origin_y, resolution))
         self._log_metrics()
+
+    # ===== Path Validity Check =====
+
+    def _check_path_validity(self):
+        if self.current_path is None or not self.waypoints:
+            return
+
+        resp = self._get_grid()
+        if resp is None:
+            return
+
+        width = resp.width
+        grid_flat = resp.grid
+
+        for gx, gy in self.current_path:
+            if grid_flat[gy * width + gx] > 0:  # only occupied (1) blocks; unknown (-1) is ok
+                self.current_path = None
+                self.replan_count += 1
+                self._plan()
+                return
 
     # ===== Core Algorithm =====
 
@@ -221,7 +207,8 @@ class AStarNavigationNode(Node):
             return 0 <= gx < width and 0 <= gy < height
 
         def is_free(gx, gy):
-            return grid_flat[gy * width + gx] == 0
+            # -1 (unknown) and 0 (free) are passable; 1 (occupied) is not
+            return grid_flat[gy * width + gx] <= 0
 
         def heuristic(a, b):
             return abs(a[0] - b[0]) + abs(a[1] - b[1])
