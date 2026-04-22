@@ -199,9 +199,15 @@ class AStarNavigationNode(Node):
             if not (0 <= gx < width and 0 <= gy < height):
                 continue  # start cell can be outside grid when UAV spawns below grid boundary
             if grid_flat[gy * width + gx] > 0:  # only occupied (1) blocks; unknown (-1) is ok
+                saved = self.current_path
                 self.current_path = None
                 self.replan_count += 1
                 self._plan()
+                if self.current_path is None:
+                    # Replan failed — almost always a dynamic obstacle (other UAV) in the
+                    # path. Restore the old path so the executor keeps moving while the
+                    # blocker clears; the replan timer will retry on the next tick.
+                    self.current_path = saved
                 return
 
     # ===== Core Algorithm =====

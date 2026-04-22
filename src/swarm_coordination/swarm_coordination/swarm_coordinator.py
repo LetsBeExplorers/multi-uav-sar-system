@@ -114,6 +114,15 @@ class SwarmCoordinator(Node):
         # Resuming from pause or recovery — navigator still has waypoints, just unpause
         if msg.previous_state in ('VERIFYING', 'TARGET_LOCK', 'RECOVERY'):
             self.is_paused = False
+            # If the stagger timer fired while we were in RECOVERY, waypoints were never
+            # published (the timer checks current_mode == 'SEARCHING' and bails out).
+            # Detect this: no start_time set + stagger timer is gone + back in SEARCHING.
+            if (self.current_mode == 'SEARCHING'
+                    and self.start_time is None
+                    and self._stagger_timer is None):
+                self._reset_coverage()
+                self.start_time = time.time()
+                self._publish_search_waypoints()
             return
 
         self.is_paused = False
