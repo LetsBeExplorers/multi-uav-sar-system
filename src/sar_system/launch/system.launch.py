@@ -21,19 +21,6 @@ def generate_launch_description():
     # List of UAVs in the system
     uavs = ['x1', 'x2', 'x3']
 
-    # Mission manager (single instance — aggregates all UAV states and coverage)
-    nodes.append(
-        Node(
-            package='mission_manager',
-            executable='mission_manager',
-            name='mission_manager',
-            parameters=[{
-                'num_uavs': len(uavs),
-                'threshold': 0.95,
-            }]
-        )
-    )
-
     for uav in uavs:
 
         # FSM (one per UAV — drives all state transitions)
