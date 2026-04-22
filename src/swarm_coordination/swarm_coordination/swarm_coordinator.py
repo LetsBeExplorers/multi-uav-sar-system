@@ -110,8 +110,8 @@ class SwarmCoordinator(Node):
             self.is_paused = True
             return
 
-        # Resuming from a pause — navigator still has waypoints, just unpause
-        if msg.previous_state in ('VERIFYING', 'TARGET_LOCK'):
+        # Resuming from pause or recovery — navigator still has waypoints, just unpause
+        if msg.previous_state in ('VERIFYING', 'TARGET_LOCK', 'RECOVERY'):
             self.is_paused = False
             return
 
