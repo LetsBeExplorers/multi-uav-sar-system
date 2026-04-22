@@ -66,6 +66,7 @@ class SwarmCoordinator(Node):
         self.coverage_map = {}          # uav_id → coverage_ratio
         self.start_time = None
         self.run_id = int(time.time())
+        self._stagger_timer = None       # one-shot delay for first search start
 
         qos_transient = QoSProfile(
             depth=1,
@@ -118,9 +119,20 @@ class SwarmCoordinator(Node):
         self.is_paused = False
 
         if self.current_mode == 'SEARCHING':
-            self._reset_coverage()
-            self.start_time = time.time()
-            self._publish_search_waypoints()
+            if self.start_time is None:
+                # First-ever SEARCHING entry: stagger by UAV index to prevent
+                # simultaneous lawnmower rows causing cross-region collisions.
+                delay = self.uav_index * 6.0
+                if delay <= 0.0:
+                    self._reset_coverage()
+                    self.start_time = time.time()
+                    self._publish_search_waypoints()
+                elif self._stagger_timer is None:
+                    self._stagger_timer = self.create_timer(delay, self._on_stagger_expired)
+            else:
+                self._reset_coverage()
+                self.start_time = time.time()
+                self._publish_search_waypoints()
 
         elif self.current_mode == 'REFINING':
             self._reset_coverage()
@@ -134,6 +146,15 @@ class SwarmCoordinator(Node):
             self._go_home_pub.publish(Empty())
 
     # ===== Waypoint Generation =====
+
+    def _on_stagger_expired(self):
+        """One-shot timer callback: fires once after the per-UAV startup delay."""
+        self._stagger_timer.cancel()
+        self._stagger_timer = None
+        if self.current_mode == 'SEARCHING':
+            self._reset_coverage()
+            self.start_time = time.time()
+            self._publish_search_waypoints()
 
     def _publish_search_waypoints(self):
         poses = _lawnmower(

@@ -125,7 +125,7 @@ def generate_launch_description():
                 name='astar_navigation_' + uav,
                 parameters=[{
                     'uav_id': uav,
-                    'replan_check_rate': 0.5,
+                    'replan_check_rate': 2.0,
                 }]
             )
         )
