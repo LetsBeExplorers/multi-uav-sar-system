@@ -2,12 +2,11 @@ import heapq
 from typing import Dict, List, Optional, Tuple
 
 from geometry_msgs.msg import PoseArray, PoseStamped
-from nav_msgs.msg import Odometry, Path
+from nav_msgs.msg import OccupancyGrid, Odometry, Path
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sar_msgs.msg import FSMEvent
-from sar_msgs.srv import GetOccupancyGrid
 from std_msgs.msg import Empty, String
 
 GridCell = Tuple[int, int]
@@ -35,6 +34,7 @@ class AStarNavigationNode(Node):
         self.waypoints = []       # world-coord list from coordinator
         self.waypoint_index = 0   # which waypoint we're currently heading to
         self.current_path = None  # active A* path to current waypoint
+        self._cached_grid = None  # latest OccupancyGrid from world_model
         self.initial_plan_count = 0
         self.replan_count = 0
         self.path_failed_count = 0
@@ -75,10 +75,12 @@ class AStarNavigationNode(Node):
             self._on_waypoint_reached,
             10
         )
-
-        # ===== Service Client =====
-        self._grid_client = self.create_client(
-            GetOccupancyGrid, f'/{self.uav_id}/world_model/get_grid')
+        self.create_subscription(
+            OccupancyGrid,
+            f'/{self.uav_id}/world_model/grid',
+            self._on_grid_update,
+            qos_transient
+        )
 
         # ===== Replan Timer =====
         self.create_timer(1.0 / replan_rate, self._check_path_validity)
@@ -116,21 +118,12 @@ class AStarNavigationNode(Node):
         self.current_path = None
         self._plan()
 
-    # ===== Planning =====
+    # ===== Grid Cache =====
 
-    def _get_grid(self):
-        if not self._grid_client.wait_for_service(timeout_sec=0.1):
-            self.get_logger().warn('world_model service unavailable')
-            return None
-        future = self._grid_client.call_async(GetOccupancyGrid.Request())
-        # spin in a fresh executor so this works from inside a callback
-        executor = rclpy.executors.SingleThreadedExecutor()
-        executor.add_node(self)
-        try:
-            executor.spin_until_future_complete(future, timeout_sec=2.0)
-        finally:
-            executor.remove_node(self)
-        return future.result() if future.done() else None
+    def _on_grid_update(self, msg):
+        self._cached_grid = msg
+
+    # ===== Planning =====
 
     def _plan(self):
         if not self.waypoints or self.current_pose is None:
@@ -138,15 +131,15 @@ class AStarNavigationNode(Node):
         if self.waypoint_index >= len(self.waypoints):
             return
 
-        resp = self._get_grid()
-        if resp is None:
+        if self._cached_grid is None:
+            self.get_logger().warn(f'[{self.uav_id}] no grid yet, waiting...')
             return
 
-        width = resp.width
-        grid_flat = resp.grid
-        origin_x = resp.origin_x
-        origin_y = resp.origin_y
-        resolution = resp.resolution
+        width = self._cached_grid.info.width
+        grid_flat = self._cached_grid.data
+        origin_x = self._cached_grid.info.origin.position.x
+        origin_y = self._cached_grid.info.origin.position.y
+        resolution = self._cached_grid.info.resolution
 
         def w2g(wx, wy):
             return (
@@ -186,15 +179,19 @@ class AStarNavigationNode(Node):
     # ===== Path Validity Check =====
 
     def _check_path_validity(self):
-        if self.current_path is None or not self.waypoints:
+        if not self.waypoints:
             return
 
-        resp = self._get_grid()
-        if resp is None:
+        # Retry planning if we have waypoints but no path yet
+        if self.current_path is None:
+            self._plan()
             return
 
-        width = resp.width
-        grid_flat = resp.grid
+        if self._cached_grid is None:
+            return
+
+        width = self._cached_grid.info.width
+        grid_flat = self._cached_grid.data
 
         for gx, gy in self.current_path:
             if grid_flat[gy * width + gx] > 0:  # only occupied (1) blocks; unknown (-1) is ok

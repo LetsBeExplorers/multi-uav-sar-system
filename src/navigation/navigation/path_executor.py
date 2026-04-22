@@ -130,6 +130,7 @@ class PathExecutorNode(Node):
         if dist > 0:
             cmd.linear.x = dx / dist * self.speed
             cmd.linear.y = dy / dist * self.speed
+        cmd.linear.z = 1.0  # maintain flight altitude
         self._cmd_pub.publish(cmd)
 
         # advance index when close enough to the current (non-lookahead) cell

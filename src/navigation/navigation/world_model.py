@@ -1,8 +1,10 @@
 import math
 
-from nav_msgs.msg import Odometry
+from nav_msgs.msg import OccupancyGrid, Odometry
+from geometry_msgs.msg import Pose
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sar_msgs.msg import FSMEvent
 from sar_msgs.srv import GetOccupancyGrid
 from sensor_msgs.msg import LaserScan
@@ -58,8 +60,16 @@ class WorldModelNode(Node):
             if self._in_bounds(gx, gy):
                 self.static_grid[gy][gx] = 1
 
+        qos_transient = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL
+        )
+
         # ===== Publishers =====
         self._event_pub = self.create_publisher(FSMEvent, f'/{self.uav_id}/fsm/event', 10)
+        self._grid_pub = self.create_publisher(
+            OccupancyGrid, f'/{self.uav_id}/world_model/grid', qos_transient)
 
         # ===== Subscribers =====
         self.create_subscription(
@@ -91,6 +101,9 @@ class WorldModelNode(Node):
             f'/{self.uav_id}/world_model/get_grid',
             self._get_occupancy_grid
         )
+
+        # ===== Grid Publisher Timer =====
+        self.create_timer(0.5, self._publish_grid)
 
         self.get_logger().debug(f'WorldModelNode ready for {self.uav_id}')
 
@@ -192,6 +205,24 @@ class WorldModelNode(Node):
                 event.event = 'COLLISION_RISK'
                 event.timestamp = self.get_clock().now().nanoseconds / 1e9
                 self._event_pub.publish(event)
+
+    # ===== Grid Publisher =====
+
+    def _publish_grid(self):
+        msg = OccupancyGrid()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = 'map'
+        msg.info.width = self.grid_width
+        msg.info.height = self.grid_height
+        msg.info.resolution = float(self.resolution)
+        msg.info.origin.position.x = float(self.origin_x)
+        msg.info.origin.position.y = float(self.origin_y)
+        msg.info.origin.orientation.w = 1.0
+        flat = []
+        for row in self.grid:
+            flat.extend(row)
+        msg.data = flat
+        self._grid_pub.publish(msg)
 
     # ===== Service Handler =====
 
