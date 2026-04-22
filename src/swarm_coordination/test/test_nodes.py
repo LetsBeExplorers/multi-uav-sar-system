@@ -4,8 +4,10 @@
 
 import pytest
 import rclpy
-from sar_msgs.msg import FSMEvent, UAVState
+from geometry_msgs.msg import PoseArray
+from sar_msgs.msg import FSMEvent, MissionCoverage, UAVState
 from std_msgs.msg import Empty, String
+from swarm_coordination.swarm_coordinator import SwarmCoordinator, _lawnmower
 from swarm_coordination.uav_state_manager import UAVStateManager
 
 
@@ -384,3 +386,321 @@ def test_target_detected_published_on_target_lock():
 
     uut.destroy_node()
     helper.destroy_node()
+
+
+# ===== SwarmCoordinator =====
+
+def _make_state_msg(uav_id, state, previous_state='IDLE'):
+    msg = UAVState()
+    msg.uav_id = uav_id
+    msg.state = state
+    msg.previous_state = previous_state
+    msg.timestamp = 0.0
+    return msg
+
+
+def _make_coordinator(uav_id='x1', num_uavs=3, rows=3, threshold=0.95):
+    return SwarmCoordinator()
+
+
+# ===== Lawnmower helper =====
+
+def test_lawnmower_returns_2_poses_per_row():
+    poses = _lawnmower(0.0, 10.0, 0.0, 10.0, rows=4)
+    assert len(poses) == 8   # 4 rows × 2 endpoints
+
+
+def test_lawnmower_alternates_direction():
+    poses = _lawnmower(0.0, 10.0, 0.0, 10.0, rows=2)
+    # row 0: left→right (x_start first)
+    assert poses[0].position.x == pytest.approx(0.0)
+    assert poses[1].position.x == pytest.approx(10.0)
+    # row 1: right→left (x_end first)
+    assert poses[2].position.x == pytest.approx(10.0)
+    assert poses[3].position.x == pytest.approx(0.0)
+
+
+def test_lawnmower_single_row_stays_at_ymin():
+    poses = _lawnmower(0.0, 5.0, -3.0, 3.0, rows=1)
+    assert all(p.position.y == pytest.approx(-3.0) for p in poses)
+
+
+# ===== Region assignment =====
+
+def test_region_sliced_correctly_for_x1():
+    uut = SwarmCoordinator()
+    # default: area=[-10,10], num_uavs=3, uav_id='x1' (index 0)
+    # slice_width = 20/3 ≈ 6.667
+    assert uut.x_start == pytest.approx(-10.0)
+    assert uut.x_end == pytest.approx(-10.0 + 20.0 / 3)
+    uut.destroy_node()
+
+
+# ===== Waypoints published on SEARCHING =====
+
+def test_waypoints_published_on_searching_state():
+    uut = _make_coordinator()
+    helper = rclpy.create_node('test_coord_search_helper')
+    received = []
+
+    from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+    qos = QoSProfile(
+        depth=1,
+        reliability=ReliabilityPolicy.RELIABLE,
+        durability=DurabilityPolicy.TRANSIENT_LOCAL
+    )
+    helper.create_subscription(PoseArray, '/x1/nav/waypoints', received.append, qos)
+
+    _spin(uut, helper, 10)
+    uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+    _spin(uut, helper, 20)
+
+    assert len(received) == 1
+    assert len(received[0].poses) == 3 * 2   # rows=3, 2 endpoints each
+
+    uut.destroy_node()
+    helper.destroy_node()
+
+
+def test_waypoints_not_published_for_other_uav():
+    uut = _make_coordinator()
+    helper = rclpy.create_node('test_coord_other_uav_helper')
+    received = []
+
+    from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+    qos = QoSProfile(
+        depth=1,
+        reliability=ReliabilityPolicy.RELIABLE,
+        durability=DurabilityPolicy.TRANSIENT_LOCAL
+    )
+    helper.create_subscription(PoseArray, '/x1/nav/waypoints', received.append, qos)
+
+    _spin(uut, helper, 10)
+    uut._on_fsm_state_change(_make_state_msg('x2', 'SEARCHING', 'IDLE'))
+    _spin(uut, helper, 20)
+
+    assert len(received) == 0
+
+    uut.destroy_node()
+    helper.destroy_node()
+
+
+def test_refinement_waypoints_are_denser():
+    uut = _make_coordinator()
+
+    search_count = 0
+    refine_count = 0
+
+    uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+    search_count = uut.coverage_waypoints_total
+
+    uut._on_fsm_state_change(_make_state_msg('x1', 'REFINING', 'SEARCHING'))
+    refine_count = uut.coverage_waypoints_total
+
+    assert refine_count == search_count * 2
+
+    uut.destroy_node()
+
+
+# ===== Coverage tracking =====
+
+def test_waypoint_reached_increments_visited():
+    uut = _make_coordinator()
+    uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+
+    uut._on_waypoint_reached(Empty())
+    uut._on_waypoint_reached(Empty())
+
+    assert uut.coverage_waypoints_visited == 2
+    uut.destroy_node()
+
+
+def test_waypoint_reached_ignored_when_paused():
+    uut = _make_coordinator()
+    uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+    uut._on_fsm_state_change(_make_state_msg('x1', 'VERIFYING', 'SEARCHING'))
+
+    uut._on_waypoint_reached(Empty())
+    uut._on_waypoint_reached(Empty())
+
+    assert uut.coverage_waypoints_visited == 0
+    uut.destroy_node()
+
+
+def test_coverage_not_reset_when_resuming_from_verifying():
+    uut = _make_coordinator()
+    uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+
+    uut._on_waypoint_reached(Empty())
+    assert uut.coverage_waypoints_visited == 1
+
+    # enter VERIFYING — pauses counting
+    uut._on_fsm_state_change(_make_state_msg('x1', 'VERIFYING', 'SEARCHING'))
+    # resume — should NOT reset
+    uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'VERIFYING'))
+
+    assert uut.coverage_waypoints_visited == 1
+
+    uut.destroy_node()
+
+
+def test_coverage_reset_on_fresh_mode_entry():
+    uut = _make_coordinator()
+    uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+    uut._on_waypoint_reached(Empty())
+
+    # transition to REFINING (fresh, not from VERIFYING)
+    uut._on_fsm_state_change(_make_state_msg('x1', 'REFINING', 'SEARCHING'))
+
+    assert uut.coverage_waypoints_visited == 0
+    uut.destroy_node()
+
+
+# ===== Coverage events =====
+
+def test_region_complete_published_when_all_waypoints_visited():
+    uut = _make_coordinator()
+    helper = rclpy.create_node('test_coord_region_complete_helper')
+    events = []
+    helper.create_subscription(FSMEvent, '/x1/fsm/event', events.append, 10)
+
+    _spin(uut, helper, 10)
+    uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+
+    total = uut.coverage_waypoints_total
+    for _ in range(total):
+        uut._on_waypoint_reached(Empty())
+
+    _spin(uut, helper, 20)
+
+    assert any(e.event == 'REGION_COMPLETE' for e in events)
+
+    uut.destroy_node()
+    helper.destroy_node()
+
+
+def test_region_complete_value_is_coverage_ratio():
+    uut = _make_coordinator()
+    helper = rclpy.create_node('test_coord_coverage_value_helper')
+    events = []
+    helper.create_subscription(FSMEvent, '/x1/fsm/event', events.append, 10)
+
+    _spin(uut, helper, 10)
+    uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+
+    total = uut.coverage_waypoints_total
+    for _ in range(total):
+        uut._on_waypoint_reached(Empty())
+
+    _spin(uut, helper, 20)
+
+    region_events = [e for e in events if e.event == 'REGION_COMPLETE']
+    assert len(region_events) == 1
+    assert region_events[0].value == pytest.approx(1.0)
+
+    uut.destroy_node()
+    helper.destroy_node()
+
+
+def test_refinement_complete_published_after_refining():
+    uut = _make_coordinator()
+    helper = rclpy.create_node('test_coord_refine_complete_helper')
+    events = []
+    helper.create_subscription(FSMEvent, '/x1/fsm/event', events.append, 10)
+
+    _spin(uut, helper, 10)
+    uut._on_fsm_state_change(_make_state_msg('x1', 'REFINING', 'SEARCHING'))
+
+    total = uut.coverage_waypoints_total
+    for _ in range(total):
+        uut._on_waypoint_reached(Empty())
+
+    _spin(uut, helper, 20)
+
+    assert any(e.event == 'REFINEMENT_COMPLETE' for e in events)
+
+    uut.destroy_node()
+    helper.destroy_node()
+
+
+def test_all_drones_done_when_all_coverage_complete():
+    uut = _make_coordinator()
+    helper = rclpy.create_node('test_coord_all_done_helper')
+    events = []
+    helper.create_subscription(FSMEvent, '/x1/fsm/event', events.append, 10)
+
+    _spin(uut, helper, 10)
+
+    # seed coverage_map: all UAVs at full coverage
+    uut.coverage_map = {'x1': 1.0, 'x2': 1.0, 'x3': 1.0}
+    uut._on_fsm_state_change(_make_state_msg('x1', 'ASSISTING', 'REFINING'))
+
+    _spin(uut, helper, 20)
+
+    # should immediately emit ALL_DRONES_DONE since all coverage >= threshold
+    assert any(e.event == 'ALL_DRONES_DONE' for e in events)
+
+    uut.destroy_node()
+    helper.destroy_node()
+
+
+def test_assist_complete_when_other_regions_unfinished():
+    uut = _make_coordinator()
+    helper = rclpy.create_node('test_coord_assist_complete_helper')
+    events = []
+    helper.create_subscription(FSMEvent, '/x1/fsm/event', events.append, 10)
+
+    _spin(uut, helper, 10)
+
+    # x2 still below threshold
+    uut.coverage_map = {'x1': 1.0, 'x2': 0.5, 'x3': 1.0}
+    uut._on_fsm_state_change(_make_state_msg('x1', 'ASSISTING', 'REFINING'))
+
+    total = uut.coverage_waypoints_total
+    for _ in range(total):
+        uut._on_waypoint_reached(Empty())
+
+    _spin(uut, helper, 20)
+
+    assert any(e.event == 'ASSIST_COMPLETE' for e in events)
+
+    uut.destroy_node()
+    helper.destroy_node()
+
+
+# ===== go_home triggered on RETURNING =====
+
+def test_go_home_published_on_returning():
+    uut = _make_coordinator()
+    helper = rclpy.create_node('test_coord_go_home_helper')
+    received = []
+    helper.create_subscription(Empty, '/x1/nav/go_home', received.append, 10)
+
+    _spin(uut, helper, 10)
+    uut._on_fsm_state_change(_make_state_msg('x1', 'RETURNING', 'ASSISTING'))
+    _spin(uut, helper, 20)
+
+    assert len(received) == 1
+
+    uut.destroy_node()
+    helper.destroy_node()
+
+
+# ===== Coverage map update =====
+
+def test_coverage_map_updated_from_mission_coverage():
+    uut = _make_coordinator()
+
+    msg = MissionCoverage()
+    msg.uav_ids = ['x1', 'x2', 'x3']
+    msg.coverage_ratios = [0.5, 0.8, 0.3]
+    msg.all_complete = False
+    msg.timestamp = 0.0
+
+    uut._on_coverage_update(msg)
+
+    assert uut.coverage_map['x1'] == pytest.approx(0.5)
+    assert uut.coverage_map['x2'] == pytest.approx(0.8)
+    assert uut.coverage_map['x3'] == pytest.approx(0.3)
+
+    uut.destroy_node()
