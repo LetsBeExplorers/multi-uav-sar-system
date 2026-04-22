@@ -102,7 +102,7 @@ def generate_launch_description():
                     [
                         '/world/', world_name,
                         '/model/', uav,
-                        '/link/X3/base_link/sensor/lidar/scan'
+                        '/link/base_link/sensor/lidar/scan'
                         '@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan'
                     ]
                 ],
@@ -110,7 +110,7 @@ def generate_launch_description():
                     (
                         ['/world/', world_name,
                          '/model/', uav,
-                         '/link/X3/base_link/sensor/lidar/scan'],
+                         '/link/base_link/sensor/lidar/scan'],
                         f'/{uav}/scan'
                     )
                 ]
