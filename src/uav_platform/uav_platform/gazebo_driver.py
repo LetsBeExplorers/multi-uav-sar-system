@@ -16,7 +16,7 @@ class GazeboDriver(Node):
 
         # ===== Publishers =====
         self._cmd_pub = self.create_publisher(Twist, f'/model/{uav}/cmd_vel', 10)
-        self._pose_pub = self.create_publisher(Odometry, f'/{uav}/state/pose', 10)
+        self._pose_pub = self.create_publisher(Odometry, f'/{uav}/state/odom', 10)
         self._health_pub = self.create_publisher(DriverHealth, f'/{uav}/driver/health', 10)
 
         # ===== Subscribers =====
