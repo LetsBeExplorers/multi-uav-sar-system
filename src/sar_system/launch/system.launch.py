@@ -21,9 +21,51 @@ def generate_launch_description():
     # List of UAVs in the system
     uavs = ['x1', 'x2', 'x3']
 
+    # Mission manager (single instance — aggregates all UAV states and coverage)
+    nodes.append(
+        Node(
+            package='mission_manager',
+            executable='mission_manager',
+            name='mission_manager',
+            parameters=[{
+                'num_uavs': len(uavs),
+                'threshold': 0.95,
+            }]
+        )
+    )
+
     for uav in uavs:
 
-        # Platform interface (handles control commands)
+        # FSM (one per UAV — drives all state transitions)
+        nodes.append(
+            Node(
+                package='swarm_coordination',
+                executable='uav_state_manager',
+                name='uav_state_manager_' + uav,
+                parameters=[{
+                    'uav_id': uav,
+                    'threshold': 0.95,
+                }]
+            )
+        )
+
+        # Swarm coordinator (generates waypoints, tracks coverage)
+        nodes.append(
+            Node(
+                package='swarm_coordination',
+                executable='swarm_coordinator',
+                name='swarm_coordinator_' + uav,
+                parameters=[{
+                    'uav_id': uav,
+                    'num_uavs': len(uavs),
+                    'area_bounds': [-10, 10, -10, 10],
+                    'rows': 7,
+                    'threshold': 0.95,
+                }]
+            )
+        )
+
+        # Platform interface (safety constraints, health monitoring)
         nodes.append(
             Node(
                 package='uav_platform',
@@ -51,7 +93,7 @@ def generate_launch_description():
                 name='world_model_' + uav,
                 parameters=[{
                     'uav_id': uav,
-                    'num_uavs': 3,
+                    'num_uavs': len(uavs),
                     'grid_width': 21,
                     'grid_height': 21,
                     'resolution': 1.0,
@@ -88,40 +130,31 @@ def generate_launch_description():
             )
         )
 
-        # Path executor (follows waypoints)
-        nodes.append(
-            Node(
-                package='navigation',
-                executable='path_executor',
-                name='path_executor_' + uav,
-                parameters=[{'uav_name': uav}]
-            )
-        )
-
-        # Swarm coordinator (generates waypoints)
-        nodes.append(
-            Node(
-                package='swarm_coordination',
-                executable='swarm_coordinator',
-                name='swarm_coordinator_' + uav,
-                parameters=[
-                    {'uav_id': uav},
-                    {'num_uavs': 3},
-                    {'area_bounds': [-10, 10, -10, 10]},
-                    {'rows': 7}
-                ]
-            )
-        )
-
-        # A* navigation (obstacle-aware planning)
+        # A* planner (obstacle-aware path planning)
         nodes.append(
             Node(
                 package='navigation',
                 executable='astar_navigation_node',
                 name='astar_navigation_' + uav,
-                parameters=[
-                    {'uav_name': uav}
-                ]
+                parameters=[{
+                    'uav_id': uav,
+                    'replan_check_rate': 0.5,
+                }]
+            )
+        )
+
+        # Path executor (waypoint tracking and velocity control)
+        nodes.append(
+            Node(
+                package='navigation',
+                executable='path_executor',
+                name='path_executor_' + uav,
+                parameters=[{
+                    'uav_id': uav,
+                    'speed': 2.0,
+                    'waypoint_threshold': 0.2,
+                    'lookahead': 5,
+                }]
             )
         )
 
