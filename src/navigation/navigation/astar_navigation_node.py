@@ -40,7 +40,8 @@ class AStarNavigationNode(Node):
         self.path_failed_count = 0
         self._in_failure = False          # True after PATH_FAILED, until a plan succeeds
         self._consecutive_failures = 0
-        self._max_replan_attempts = 5     # REPLAN_FAIL after this many consecutive failures
+        self._path_failed_threshold = 3   # silent retries before PATH_FAILED (~1.5s at 2 Hz)
+        self._max_replan_attempts = 20    # REPLAN_FAIL after ~10s of PATH_FAILED at 2 Hz
 
         qos_transient = QoSProfile(
             depth=1,
@@ -154,19 +155,19 @@ class AStarNavigationNode(Node):
         if path is None:
             self.path_failed_count += 1
             self._consecutive_failures += 1
-            if not self._in_failure:
+            if not self._in_failure and self._consecutive_failures >= self._path_failed_threshold:
                 self._in_failure = True
                 self._publish_event('PATH_FAILED')
-            elif self._consecutive_failures >= self._max_replan_attempts:
+            elif self._in_failure and self._consecutive_failures >= self._max_replan_attempts:
                 self._publish_event('REPLAN_FAIL')
                 self._in_failure = False
                 self._consecutive_failures = 0
             self._log_metrics()
             return
 
+        self._consecutive_failures = 0
         if self._in_failure:
             self._in_failure = False
-            self._consecutive_failures = 0
             self._publish_event('REPLAN_SUCCESS')
 
         if self.current_path is None:
@@ -192,8 +193,11 @@ class AStarNavigationNode(Node):
 
         width = self._cached_grid.info.width
         grid_flat = self._cached_grid.data
+        height = len(grid_flat) // width
 
         for gx, gy in self.current_path:
+            if not (0 <= gx < width and 0 <= gy < height):
+                continue  # start cell can be outside grid when UAV spawns below grid boundary
             if grid_flat[gy * width + gx] > 0:  # only occupied (1) blocks; unknown (-1) is ok
                 self.current_path = None
                 self.replan_count += 1

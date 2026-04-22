@@ -122,7 +122,7 @@ class SwarmCoordinator(Node):
             if self.start_time is None:
                 # First-ever SEARCHING entry: stagger by UAV index to prevent
                 # simultaneous lawnmower rows causing cross-region collisions.
-                delay = self.uav_index * 6.0
+                delay = self.uav_index * 3.0
                 if delay <= 0.0:
                     self._reset_coverage()
                     self.start_time = time.time()
