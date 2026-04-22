@@ -38,11 +38,13 @@ class PathExecutorNode(Node):
         self.current_index = 0
         self.uav_x = 0.0
         self.uav_y = 0.0
+        self.uav_z = 0.0
         self.home_x = None
         self.home_y = None
         self.is_returning = False
         self.path_cells_total = 0
         self.path_cells_traversed = 0
+        self._target_z = 1.0   # cruise altitude matching waypoint z
 
         qos_transient = QoSProfile(
             depth=1,
@@ -98,6 +100,7 @@ class PathExecutorNode(Node):
     def _on_pose_update(self, msg):
         self.uav_x = msg.pose.pose.position.x
         self.uav_y = msg.pose.pose.position.y
+        self.uav_z = msg.pose.pose.position.z
 
         if self.home_x is None:
             self.home_x = self.uav_x
@@ -130,7 +133,7 @@ class PathExecutorNode(Node):
         if dist > 0:
             cmd.linear.x = dx / dist * self.speed
             cmd.linear.y = dy / dist * self.speed
-        cmd.linear.z = 1.0  # maintain flight altitude
+        cmd.linear.z = max(-1.0, min(1.0, (self._target_z - self.uav_z) * 2.0))
         self._cmd_pub.publish(cmd)
 
         # advance index when close enough to the current (non-lookahead) cell
