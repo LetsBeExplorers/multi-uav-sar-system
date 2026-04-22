@@ -112,7 +112,13 @@ class PathExecutorNode(Node):
         if not msg.poses:
             return
         self.current_path = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
-        self.current_index = 0
+        self.current_index = min(
+            range(len(self.current_path)),
+            key=lambda i: math.hypot(
+                self.current_path[i][0] - self.uav_x,
+                self.current_path[i][1] - self.uav_y
+            )
+        )
         self.path_cells_total += len(self.current_path)
 
     # ===== Execution =====
@@ -122,27 +128,23 @@ class PathExecutorNode(Node):
             self._stop()
             return
 
-        # steer toward lookahead point for smooth motion
-        target_index = min(self.current_index + self.lookahead, len(self.current_path) - 1)
-        tx, ty = self.current_path[target_index]
-        dx = tx - self.uav_x
-        dy = ty - self.uav_y
-        dist = math.hypot(dx, dy)
+        # Advance index to the nearest cell ahead (forward only).
+        # The lookahead steers the UAV past intermediate cells, so proximity-based
+        # advancement handles cases where the UAV never passes within threshold of
+        # a cell that lies off the straight-line path to the lookahead target.
+        while self.current_index + 1 < len(self.current_path):
+            cx, cy = self.current_path[self.current_index]
+            nx, ny = self.current_path[self.current_index + 1]
+            if math.hypot(nx - self.uav_x, ny - self.uav_y) <= math.hypot(cx - self.uav_x, cy - self.uav_y):
+                self.current_index += 1
+                self.path_cells_traversed += 1
+            else:
+                break
 
-        cmd = Twist()
-        if dist > 0:
-            cmd.linear.x = dx / dist * self.speed
-            cmd.linear.y = dy / dist * self.speed
-        cmd.linear.z = max(-1.0, min(1.0, (self._target_z - self.uav_z) * 2.0))
-        self._cmd_pub.publish(cmd)
-
-        # advance index when close enough to the current (non-lookahead) cell
-        cx, cy = self.current_path[self.current_index]
-        if math.hypot(cx - self.uav_x, cy - self.uav_y) < self.waypoint_threshold:
-            self.current_index += 1
-            self.path_cells_traversed += 1
-
-            if self.current_index >= len(self.current_path):
+        # Signal completion when within threshold of the final cell
+        if self.current_index == len(self.current_path) - 1:
+            cx, cy = self.current_path[-1]
+            if math.hypot(cx - self.uav_x, cy - self.uav_y) < self.waypoint_threshold:
                 self._stop()
                 # signal A* that a coverage waypoint segment is complete
                 self._reached_pub.publish(Empty())
@@ -158,6 +160,21 @@ class PathExecutorNode(Node):
 
                 self.current_path = []
                 self.current_index = 0
+                return
+
+        # steer toward lookahead point for smooth motion
+        target_index = min(self.current_index + self.lookahead, len(self.current_path) - 1)
+        tx, ty = self.current_path[target_index]
+        dx = tx - self.uav_x
+        dy = ty - self.uav_y
+        dist = math.hypot(dx, dy)
+
+        cmd = Twist()
+        if dist > 0:
+            cmd.linear.x = dx / dist * self.speed
+            cmd.linear.y = dy / dist * self.speed
+        cmd.linear.z = max(-1.0, min(1.0, (self._target_z - self.uav_z) * 2.0))
+        self._cmd_pub.publish(cmd)
 
     def _stop(self):
         self._cmd_pub.publish(Twist())

@@ -98,15 +98,15 @@ class AStarNavigationNode(Node):
     # ===== Waypoint Reception =====
 
     def _on_waypoints_received(self, msg):
-        if self.current_pose is None:
-            return
         if not msg.poses:
             return
 
         self.waypoints = [(p.position.x, p.position.y) for p in msg.poses]
         self.waypoint_index = 0
         self.current_path = None
-        self._plan()
+        if self.current_pose is not None:
+            self._plan()
+        # else: _check_path_validity timer retries once pose arrives
 
     def _on_waypoint_reached(self, msg):
         self.waypoint_index += 1

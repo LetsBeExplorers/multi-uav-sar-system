@@ -138,12 +138,8 @@ class WorldModelNode(Node):
 
     def _clear_dynamic_obstacle(self, wx, wy):
         gx, gy = self.world_to_grid(wx, wy)
-        r = self.inflation_radius
-        for dx in range(-r, r + 1):
-            for dy in range(-r, r + 1):
-                nx, ny = gx + dx, gy + dy
-                if self._in_bounds(nx, ny) and self.static_grid[ny][nx] == 0:
-                    self.grid[ny][nx] = -1
+        if self._in_bounds(gx, gy) and self.static_grid[gy][gx] == 0:
+            self.grid[gy][gx] = -1
 
     # ===== Sensor-Based Updates =====
 
@@ -192,7 +188,9 @@ class WorldModelNode(Node):
             old_x, old_y = self.dynamic_obstacles[uav_id]
             self._clear_dynamic_obstacle(old_x, old_y)
 
-        self.mark_occupied(x, y)
+        gx, gy = self.world_to_grid(x, y)
+        if self._in_bounds(gx, gy):
+            self.grid[gy][gx] = 1
         self.dynamic_obstacles[uav_id] = (x, y)
 
         if self.own_pose is not None:
