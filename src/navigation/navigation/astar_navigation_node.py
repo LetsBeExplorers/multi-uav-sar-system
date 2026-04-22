@@ -38,6 +38,9 @@ class AStarNavigationNode(Node):
         self.initial_plan_count = 0
         self.replan_count = 0
         self.path_failed_count = 0
+        self._in_failure = False          # True after PATH_FAILED, until a plan succeeds
+        self._consecutive_failures = 0
+        self._max_replan_attempts = 5     # REPLAN_FAIL after this many consecutive failures
 
         qos_transient = QoSProfile(
             depth=1,
@@ -157,13 +160,21 @@ class AStarNavigationNode(Node):
 
         if path is None:
             self.path_failed_count += 1
-            event = FSMEvent()
-            event.uav_id = self.uav_id
-            event.event = 'PATH_FAILED'
-            event.timestamp = self.get_clock().now().nanoseconds / 1e9
-            self._event_pub.publish(event)
+            self._consecutive_failures += 1
+            if not self._in_failure:
+                self._in_failure = True
+                self._publish_event('PATH_FAILED')
+            elif self._consecutive_failures >= self._max_replan_attempts:
+                self._publish_event('REPLAN_FAIL')
+                self._in_failure = False
+                self._consecutive_failures = 0
             self._log_metrics()
             return
+
+        if self._in_failure:
+            self._in_failure = False
+            self._consecutive_failures = 0
+            self._publish_event('REPLAN_SUCCESS')
 
         if self.current_path is None:
             self.initial_plan_count += 1
@@ -265,6 +276,15 @@ class AStarNavigationNode(Node):
             pose.pose.orientation.w = 1.0
             path_msg.poses.append(pose)
         return path_msg
+
+    # ===== Helpers =====
+
+    def _publish_event(self, event: str):
+        msg = FSMEvent()
+        msg.uav_id = self.uav_id
+        msg.event = event
+        msg.timestamp = self.get_clock().now().nanoseconds / 1e9
+        self._event_pub.publish(msg)
 
     # ===== Metrics =====
 
