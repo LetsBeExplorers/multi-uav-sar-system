@@ -86,8 +86,6 @@ class AStarNavigationNode(Node):
         # ===== Replan Timer =====
         self.create_timer(1.0 / replan_rate, self._check_path_validity)
 
-        self.get_logger().debug(f'AStarNavigationNode ready for {self.uav_id}')
-
     # ===== Pose Tracking =====
 
     def _on_pose_update(self, msg):

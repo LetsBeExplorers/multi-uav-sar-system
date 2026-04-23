@@ -93,8 +93,6 @@ class PathExecutorNode(Node):
         # ===== Timer =====
         self.create_timer(0.1, self._move_step)
 
-        self.get_logger().debug(f'PathExecutorNode ready for {self.uav_id}')
-
     # ===== Pose Tracking =====
 
     def _on_pose_update(self, msg):

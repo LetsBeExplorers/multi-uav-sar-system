@@ -105,8 +105,6 @@ class WorldModelNode(Node):
         # ===== Grid Publisher Timer =====
         self.create_timer(0.2, self._publish_grid)
 
-        self.get_logger().debug(f'WorldModelNode ready for {self.uav_id}')
-
     # ===== Grid Management =====
 
     def world_to_grid(self, wx, wy):

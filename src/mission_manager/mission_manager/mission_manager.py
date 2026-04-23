@@ -39,8 +39,6 @@ class MissionManager(Node):
         self.create_subscription(UAVState, '/uav/state', self._on_uav_state_change, 10)
         self.create_subscription(String, '/mission/status', self._on_status, 10)
 
-        self.get_logger().debug('MissionManager ready')
-
     # ===== State Tracking =====
 
     def _on_uav_state_change(self, msg):

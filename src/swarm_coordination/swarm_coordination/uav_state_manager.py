@@ -48,8 +48,7 @@ class UAVStateManager(Node):
 
         # Publish initial state so other nodes see IDLE on startup
         self._publish_state()
-        self.get_logger().info(f'[{self.uav_id}] UAVStateManager ready — state: IDLE')
-
+        
     # ===== Callbacks =====
 
     def _on_mission_start(self, _msg):

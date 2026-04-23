@@ -46,8 +46,6 @@ class PlatformInterface(Node):
         self.create_subscription(
             LaserScan, f'/{self.uav_name}/scan', self._on_scan, 10)
 
-        self.get_logger().debug(f'PlatformInterface ready for {self.uav_name}')
-
     # ===== Command Processing =====
 
     def _process_command(self, msg):

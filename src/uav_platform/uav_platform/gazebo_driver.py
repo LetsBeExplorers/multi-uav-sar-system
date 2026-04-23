@@ -23,8 +23,6 @@ class GazeboDriver(Node):
         self.create_subscription(Twist, f'/{uav}/driver/cmd_vel', self._forward_command, 10)
         self.create_subscription(Odometry, f'/model/{uav}/odometry', self._forward_state, 10)
 
-        self.get_logger().debug(f'GazeboDriver ready for {uav}')
-
     # ===== Command Passthrough =====
 
     def _forward_command(self, msg):

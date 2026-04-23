@@ -94,11 +94,6 @@ class SwarmCoordinator(Node):
         self.create_subscription(
             MissionCoverage, '/mission/coverage', self._on_coverage_update, 10)
 
-        self.get_logger().info(
-            f'[{self.uav_id}] SwarmCoordinator ready — '
-            f'region x:[{self.x_start:.1f}, {self.x_end:.1f}]'
-        )
-
     # ===== FSM Reaction =====
 
     def _on_fsm_state_change(self, msg):
