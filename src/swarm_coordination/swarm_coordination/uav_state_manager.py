@@ -38,6 +38,7 @@ class UAVStateManager(Node):
         # ===== Publishers =====
         self._state_pub = self.create_publisher(UAVState, '/uav/state', 10)
         self._target_pub = self.create_publisher(String, '/gcs/target_detected', 10)
+        self._command_pub = self.create_publisher(FSMEvent, f'/{self.uav_id}/fsm/command', 10)
 
         # ===== Subscribers =====
         self.create_subscription(Empty, '/mission/start', self._on_mission_start, 10)
@@ -152,11 +153,15 @@ class UAVStateManager(Node):
             if event == 'REPLAN_SUCCESS':
                 resume = self.previous_state if self.previous_state in _ALL_STATES else 'SEARCHING'
                 self._transition(resume)
+
             elif event == 'REPLAN_FAIL':
                 if self.recovery_attempts < self.max_recovery_attempts:
                     self._transition('RECOVERY')  # retry
                 else:
                     self._transition('RETURNING')
+
+            elif event in ('COLLISION_RISK', 'PATH_FAILED', 'COMMS_LOSS'):
+                pass  # intentionally ignored during recovery
 
     def _transition(self, new_state: str):
         old = self.current_state
@@ -197,6 +202,14 @@ class UAVStateManager(Node):
         msg = String()
         msg.data = f'{self.uav_id}:TARGET_LOCK'
         self._target_pub.publish(msg)
+
+    def _publish_command(self, event):
+        msg = FSMEvent()
+        msg.uav_id = self.uav_id
+        msg.event = event
+        msg.timestamp = self.get_clock().now().nanoseconds / 1e9
+        msg.value = 0.0
+        self._command_pub.publish(msg)
 
 
 def main(args=None):
