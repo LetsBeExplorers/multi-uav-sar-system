@@ -1,4 +1,5 @@
 import threading
+import time
 
 import rclpy
 from rclpy.executors import ExternalShutdownException
@@ -101,6 +102,7 @@ class MissionManager(Node):
         if self.mission_state != 'IDLE':
             print('Mission already running')
             return
+        self._wait_for_subscribers(self._start_pub)
         self.mission_state = 'RUNNING'
         self.uav_states = {uid: 'IDLE' for uid in self.uav_ids}
         self.uav_coverage = {uid: 0.0 for uid in self.uav_ids}
@@ -111,9 +113,18 @@ class MissionManager(Node):
         if self.mission_state == 'IDLE':
             print('Mission not running')
             return
+        self._wait_for_subscribers(self._stop_pub)
         self.mission_state = 'STOPPED'
         self._stop_pub.publish(Empty())
         self.get_logger().debug('STOP sent')
+
+    def _wait_for_subscribers(self, pub, timeout=5.0):
+        """Block until all UAVs are subscribed to `pub` or timeout expires."""
+        deadline = time.time() + timeout
+        while pub.get_subscription_count() < len(self.uav_ids):
+            if time.time() > deadline:
+                return
+            time.sleep(0.1)
 
 
 def _safe_spin(node):

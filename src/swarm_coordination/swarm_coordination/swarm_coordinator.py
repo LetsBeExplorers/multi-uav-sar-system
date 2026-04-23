@@ -64,9 +64,7 @@ class SwarmCoordinator(Node):
         self.coverage_waypoints_total = 0
         self.coverage_waypoints_visited = 0
         self.coverage_map = {}          # uav_id → coverage_ratio
-        self.start_time = None
         self.run_id = int(time.time())
-        self._stagger_timer = None       # one-shot delay for first search start
 
         qos_transient = QoSProfile(
             depth=1,
@@ -107,34 +105,13 @@ class SwarmCoordinator(Node):
         # Resuming from pause or recovery — navigator still has waypoints, just unpause
         if msg.previous_state in ('VERIFYING', 'TARGET_LOCK', 'RECOVERY'):
             self.is_paused = False
-            # If the stagger timer fired while we were in RECOVERY, waypoints were never
-            # published (the timer checks current_mode == 'SEARCHING' and bails out).
-            # Detect this: no start_time set + stagger timer is gone + back in SEARCHING.
-            if (self.current_mode == 'SEARCHING'
-                    and self.start_time is None
-                    and self._stagger_timer is None):
-                self._reset_coverage()
-                self.start_time = time.time()
-                self._publish_search_waypoints()
             return
 
         self.is_paused = False
 
         if self.current_mode == 'SEARCHING':
-            if self.start_time is None:
-                # First-ever SEARCHING entry: stagger by UAV index to prevent
-                # simultaneous lawnmower rows causing cross-region collisions.
-                delay = self.uav_index * 3.0
-                if delay <= 0.0:
-                    self._reset_coverage()
-                    self.start_time = time.time()
-                    self._publish_search_waypoints()
-                elif self._stagger_timer is None:
-                    self._stagger_timer = self.create_timer(delay, self._on_stagger_expired)
-            else:
-                self._reset_coverage()
-                self.start_time = time.time()
-                self._publish_search_waypoints()
+            self._reset_coverage()
+            self._publish_search_waypoints()
 
         elif self.current_mode == 'REFINING':
             self._reset_coverage()
@@ -145,15 +122,6 @@ class SwarmCoordinator(Node):
             self._publish_assistive_waypoints()
 
     # ===== Waypoint Generation =====
-
-    def _on_stagger_expired(self):
-        """One-shot timer callback: fires once after the per-UAV startup delay."""
-        self._stagger_timer.cancel()
-        self._stagger_timer = None
-        if self.current_mode == 'SEARCHING':
-            self._reset_coverage()
-            self.start_time = time.time()
-            self._publish_search_waypoints()
 
     def _publish_search_waypoints(self):
         poses = _lawnmower(
