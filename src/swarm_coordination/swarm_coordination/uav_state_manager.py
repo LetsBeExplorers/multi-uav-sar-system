@@ -32,6 +32,8 @@ class UAVStateManager(Node):
         # ===== State =====
         self.current_state = 'IDLE'
         self.previous_state = ''
+        self.recovery_attempts = 0
+        self.max_recovery_attempts = 3
 
         # ===== Publishers =====
         self._state_pub = self.create_publisher(UAVState, '/uav/state', 10)
@@ -151,18 +153,34 @@ class UAVStateManager(Node):
                 resume = self.previous_state if self.previous_state in _ALL_STATES else 'SEARCHING'
                 self._transition(resume)
             elif event == 'REPLAN_FAIL':
-                self._transition('RETURNING')
+                if self.recovery_attempts < self.max_recovery_attempts:
+                    self._transition('RECOVERY')  # retry
+                else:
+                    self._transition('RETURNING')
 
     def _transition(self, new_state: str):
         old = self.current_state
+
         self.previous_state = old
         self.current_state = new_state
-        self._publish_state()
 
-        if new_state == 'TARGET_LOCK':
-            self._publish_target_detected()
+        self._publish_state()
+        self._enter_state(new_state, old)
 
         self.get_logger().info(f'[{self.uav_id}] {old} → {new_state}')
+
+    def _enter_state(self, new_state: str, old_state: str):
+
+        # recovery
+        if new_state == 'RECOVERY':
+            self.recovery_attempts += 1
+
+        if old_state == 'RECOVERY' and new_state != 'RECOVERY':
+            self.recovery_attempts = 0
+
+        # target lock
+        if new_state == 'TARGET_LOCK':
+            self._publish_target_detected()
 
     # ===== Publishers =====
 
