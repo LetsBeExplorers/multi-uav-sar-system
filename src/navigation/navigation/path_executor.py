@@ -78,12 +78,6 @@ class PathExecutorNode(Node):
             10
         )
         self.create_subscription(
-            Empty,
-            f'/{self.uav_id}/nav/go_home',
-            self._on_go_home,
-            10
-        )
-        self.create_subscription(
             FSMEvent,
             f'/{self.uav_id}/fsm/command',
             self._on_fsm_command,
@@ -203,9 +197,6 @@ class PathExecutorNode(Node):
 
         self.get_logger().info(
             f'[{self.uav_id}] returning home ({self.home_x:.1f}, {self.home_y:.1f})')
-
-    def _on_go_home(self, msg):
-        self.go_home()
 
     def _on_fsm_command(self, msg):
         if msg.event == 'GO_HOME':

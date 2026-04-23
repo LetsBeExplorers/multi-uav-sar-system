@@ -668,24 +668,6 @@ def test_assist_complete_when_other_regions_unfinished():
     helper.destroy_node()
 
 
-# ===== go_home triggered on RETURNING =====
-
-def test_go_home_published_on_returning():
-    uut = _make_coordinator()
-    helper = rclpy.create_node('test_coord_go_home_helper')
-    received = []
-    helper.create_subscription(Empty, '/x1/nav/go_home', received.append, 10)
-
-    _spin(uut, helper, 10)
-    uut._on_fsm_state_change(_make_state_msg('x1', 'RETURNING', 'ASSISTING'))
-    _spin(uut, helper, 20)
-
-    assert len(received) == 1
-
-    uut.destroy_node()
-    helper.destroy_node()
-
-
 # ===== Coverage map update =====
 
 def test_coverage_map_updated_from_mission_coverage():

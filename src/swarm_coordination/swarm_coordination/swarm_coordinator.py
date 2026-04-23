@@ -80,8 +80,6 @@ class SwarmCoordinator(Node):
         self._event_pub = self.create_publisher(
             FSMEvent, f'/{self.uav_id}/fsm/event', 10)
         self._status_pub = self.create_publisher(String, '/mission/status', 10)
-        self._go_home_pub = self.create_publisher(
-            Empty, f'/{self.uav_id}/nav/go_home', 10)
 
         # ===== Subscribers =====
         self.create_subscription(UAVState, '/uav/state', self._on_fsm_state_change, 10)
@@ -145,9 +143,6 @@ class SwarmCoordinator(Node):
         elif self.current_mode == 'ASSISTING':
             self._reset_coverage()
             self._publish_assistive_waypoints()
-
-        elif self.current_mode == 'RETURNING':
-            self._go_home_pub.publish(Empty())
 
     # ===== Waypoint Generation =====
 
