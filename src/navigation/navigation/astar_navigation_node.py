@@ -40,8 +40,8 @@ class AStarNavigationNode(Node):
         self.path_failed_count = 0
         self._in_failure = False          # True after PATH_FAILED, until a plan succeeds
         self._consecutive_failures = 0
-        self._path_failed_threshold = 3   # silent retries before PATH_FAILED (~1.5s at 2 Hz)
-        self._max_replan_attempts = 20    # REPLAN_FAIL after ~10s of PATH_FAILED at 2 Hz
+        self._path_failed_threshold = 20  # silent retries before PATH_FAILED (~10s at 2 Hz)
+        self._max_replan_attempts = 40    # REPLAN_FAIL ~10s after PATH_FAILED at 2 Hz
 
         qos_transient = QoSProfile(
             depth=1,
