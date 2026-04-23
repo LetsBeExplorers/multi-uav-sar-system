@@ -96,6 +96,7 @@ class UAVStateManager(Node):
         if s == 'IDLE':
             if event == 'MISSION_START':
                 self._transition('SEARCHING')
+                self._publish_command('START_SEARCH')
 
         elif s == 'SEARCHING':
             if event == 'REGION_COMPLETE':
@@ -147,6 +148,7 @@ class UAVStateManager(Node):
                 self._transition('IDLE')
             elif event == 'MISSION_START':
                 self._transition('SEARCHING')
+                self._publish_command('START_SEARCH')
 
         elif s == 'RECOVERY':
             if event == 'REPLAN_SUCCESS':
@@ -171,13 +173,12 @@ class UAVStateManager(Node):
         self._publish_state()
         self._enter_state(new_state, old)
 
-        self.get_logger().info(f'[{self.uav_id}] {old} → {new_state}')
-
     def _enter_state(self, new_state: str, old_state: str):
 
         # recovery
         if new_state == 'RECOVERY':
             self.recovery_attempts += 1
+            self._publish_command('REPLAN')
 
         if old_state == 'RECOVERY' and new_state != 'RECOVERY':
             self.recovery_attempts = 0
@@ -185,6 +186,10 @@ class UAVStateManager(Node):
         # target lock
         if new_state == 'TARGET_LOCK':
             self._publish_target_detected()
+
+        # returning
+        if new_state == 'RETURNING':
+            self._publish_command('GO_HOME')
 
     # ===== Publishers =====
 
