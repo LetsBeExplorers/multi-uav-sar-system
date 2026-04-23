@@ -1,4 +1,5 @@
 from geometry_msgs.msg import Twist
+from sensor_msgs.msg import LaserScan
 import rclpy
 from rclpy.node import Node
 from sar_msgs.msg import DriverHealth, FSMEvent
@@ -31,6 +32,7 @@ class PlatformInterface(Node):
 
         # ===== State =====
         self.flight_state = 'GROUNDED'
+        self.too_close = False
 
         # ===== Publishers =====
         self._cmd_pub = self.create_publisher(Twist, f'/{self.uav_name}/driver/cmd_vel', 10)
@@ -41,12 +43,21 @@ class PlatformInterface(Node):
             Twist, f'/{self.uav_name}/platform/cmd_vel', self._process_command, 10)
         self.create_subscription(
             DriverHealth, f'/{self.uav_name}/driver/health', self._on_health_update, 10)
+        self.create_subscription(
+            LaserScan, f'/{self.uav_name}/scan', self._on_scan, 10)
 
         self.get_logger().debug(f'PlatformInterface ready for {self.uav_name}')
 
     # ===== Command Processing =====
 
     def _process_command(self, msg):
+
+        # don't move if possible collision
+        if self.too_close:
+            safe = Twist()  # zero velocity
+            self._cmd_pub.publish(safe)
+            return
+
         # Clamp all velocity components to safe limits before forwarding to driver
         safe = Twist()
         safe.linear.x = max(min(msg.linear.x, self.max_linear), -self.max_linear)
@@ -76,6 +87,22 @@ class PlatformInterface(Node):
             self._publish_event('COMMS_LOSS')
         if msg.battery < self.low_battery_thresh:
             self._publish_event('LOW_BATTERY')
+
+    def _on_scan(self, msg):
+        # ignore invalid readings (0 or inf)
+        valid_ranges = [r for r in msg.ranges if r > 0.0 and r < float('inf')]
+
+        if not valid_ranges:
+            self.too_close = False
+            return
+
+        min_dist = min(valid_ranges)
+
+        # threshold (tune this later)
+        if min_dist < 1.0:
+            self.too_close = True
+        else:
+            self.too_close = False
 
     # ===== Helpers =====
 
