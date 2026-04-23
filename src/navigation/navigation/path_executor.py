@@ -84,6 +84,12 @@ class PathExecutorNode(Node):
             10
         )
         self.create_subscription(
+            FSMEvent,
+            f'/{self.uav_id}/fsm/command',
+            self._on_fsm_command,
+            10
+        )
+        self.create_subscription(
             Empty,
             '/mission/stop',
             self._on_stop,
@@ -200,6 +206,10 @@ class PathExecutorNode(Node):
 
     def _on_go_home(self, msg):
         self.go_home()
+
+    def _on_fsm_command(self, msg):
+        if msg.event == 'GO_HOME':
+            self.go_home()
 
     # ===== Stop Handler =====
 
