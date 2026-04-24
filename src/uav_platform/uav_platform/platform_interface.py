@@ -52,9 +52,7 @@ class PlatformInterface(Node):
 
         # don't move if possible collision
         if self.too_close:
-            safe = Twist()  # zero velocity
-            self._cmd_pub.publish(safe)
-            return
+            self.get_logger().warn("TOO CLOSE but allowing motion")
 
         # Clamp all velocity components to safe limits before forwarding to driver
         safe = Twist()
@@ -64,6 +62,9 @@ class PlatformInterface(Node):
         safe.angular.z = msg.angular.z
         self._update_flight_state(safe.linear.z)
         self._cmd_pub.publish(safe)
+
+        if abs(msg.linear.x) > 0.01 or abs(msg.linear.y) > 0.01:
+            self.get_logger().info(f"cmd: {msg.linear.x:.2f}, {msg.linear.y:.2f}")
 
     # ===== Flight State =====
 
@@ -101,6 +102,8 @@ class PlatformInterface(Node):
             self.too_close = True
         else:
             self.too_close = False
+
+        self.get_logger().info(f"min_dist={min_dist:.2f}")
 
     # ===== Helpers =====
 
