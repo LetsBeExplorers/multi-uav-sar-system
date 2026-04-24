@@ -194,6 +194,7 @@ class WorldModelNode(Node):
 
         if uav_id in self.dynamic_obstacles:
             old_x, old_y = self.dynamic_obstacles[uav_id]
+            self.mark_free(old_x, old_y)
 
         self.mark_occupied(x, y)
         self.dynamic_obstacles[uav_id] = (x, y)
