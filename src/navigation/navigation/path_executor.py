@@ -126,10 +126,7 @@ class PathExecutorNode(Node):
             self._stop()
             return
 
-        # Advance index to the nearest cell ahead (forward only).
-        # The lookahead steers the UAV past intermediate cells, so proximity-based
-        # advancement handles cases where the UAV never passes within threshold of
-        # a cell that lies off the straight-line path to the lookahead target.
+        # Advance index to the nearest cell ahead (forward only)
         while self.current_index + 1 < len(self.current_path):
             cx, cy = self.current_path[self.current_index]
             nx, ny = self.current_path[self.current_index + 1]

@@ -1,6 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from nav_msgs.msg import OccupancyGrid
+from nav_msgs.msg import OccupancyGrid, Odometry
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -16,8 +16,17 @@ class MapViewer(Node):
             10
         )
 
+        # subscribe to odom in __init__
+        self.uav_x = None
+        self.uav_y = None
+        self.create_subscription(Odometry, '/x1/state/odom', self.odom_callback, 10)
+
         plt.ion()
         self.fig, self.ax = plt.subplots()
+
+    def odom_callback(self, msg):
+        self.uav_x = msg.pose.pose.position.x
+        self.uav_y = msg.pose.pose.position.y
 
     def callback(self, msg):
         width = msg.info.width
@@ -40,6 +49,12 @@ class MapViewer(Node):
         self.ax.set_ylabel("Y")
 
         plt.draw()
+
+        if self.uav_x is not None:
+            gx = self.uav_x + 10  # origin offset
+            gy = self.uav_y + 10
+            self.ax.plot(gx, gy, 'ro', markersize=8)
+        
         plt.pause(0.001)
 
 

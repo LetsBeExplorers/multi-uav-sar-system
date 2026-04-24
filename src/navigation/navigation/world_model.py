@@ -107,9 +107,9 @@ class WorldModelNode(Node):
 
     # ===== Grid Management =====
 
-    def world_to_grid(self, wx, wy):
-        gx = int((wx - self.origin_x) / self.resolution)
-        gy = int((wy - self.origin_y) / self.resolution)
+    def world_to_grid_center(self, wx, wy):
+        gx = int((wx + 0.5 - self.origin_x) / self.resolution)
+        gy = int((wy + 0.5 - self.origin_y) / self.resolution)
         return gx, gy
 
     def grid_to_world(self, gx, gy):
@@ -121,10 +121,12 @@ class WorldModelNode(Node):
         return 0 <= gx < self.grid_width and 0 <= gy < self.grid_height
 
     def mark_occupied(self, wx, wy):
-        gx, gy = self.world_to_grid(wx, wy)
+        gx = int((wx + 0.5 - self.origin_x) / self.resolution)
+        gy = int((wy + 0.5 - self.origin_y) / self.resolution)
         if self._in_bounds(gx, gy):
             if self.static_grid[gy][gx] == 0:
-                self.grid[gy][gx] = 4
+                if self.grid[gy][gx] != -2:  # don't mark occupied if already confirmed free
+                    self.grid[gy][gx] = 4
 
     def mark_free(self, wx, wy):
         gx, gy = self.world_to_grid(wx, wy)
@@ -160,7 +162,7 @@ class WorldModelNode(Node):
             while d < max_range:
                 wx = sx + d * dx
                 wy = sy + d * dy
-                gx, gy = self.world_to_grid(wx, wy)
+                gx, gy = self.world_to_grid_center(wx, wy)
 
                 # only update each cell once
                 if (gx, gy) != (last_gx, last_gy):
@@ -187,6 +189,7 @@ class WorldModelNode(Node):
         q = msg.pose.pose.orientation
         yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y ** 2 + q.z ** 2))
         self.own_pose = (x, y, yaw)
+        self.get_logger().info(f'own_pose: world=({x:.2f},{y:.2f}) grid=({int((x+10))},{int((y+10))})', throttle_duration_sec=1.0)
 
     def _on_dynamic_obstacle_update(self, uav_id, msg):
         x = msg.pose.pose.position.x
