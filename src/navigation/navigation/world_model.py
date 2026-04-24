@@ -55,11 +55,11 @@ class WorldModelNode(Node):
         obs_flat = self.get_parameter('static_obstacles').value
         for i in range(0, len(obs_flat) - 1, 2):
             wx, wy = float(obs_flat[i]), float(obs_flat[i + 1])
-            self.mark_occupied(wx, wy)
             gx, gy = self.world_to_grid(wx, wy)
             if self._in_bounds(gx, gy):
                 self.static_grid[gy][gx] = 1
-
+                self.grid[gy][gx] = 4
+        
         qos_transient = QoSProfile(
             depth=1,
             reliability=ReliabilityPolicy.RELIABLE,
@@ -122,13 +122,9 @@ class WorldModelNode(Node):
 
     def mark_occupied(self, wx, wy):
         gx, gy = self.world_to_grid(wx, wy)
-        r = self.inflation_radius
-        for dx in range(-r, r + 1):
-            for dy in range(-r, r + 1):
-                nx, ny = gx + dx, gy + dy
-                if self._in_bounds(nx, ny):
-                    if self.static_grid[ny][nx] == 0:
-                        self.grid[ny][nx] = max(3, self.grid[ny][nx] + 2)
+        if self._in_bounds(gx, gy):
+            if self.static_grid[gy][gx] == 0:
+                self.grid[gy][gx] = 4
 
     def mark_free(self, wx, wy):
         gx, gy = self.world_to_grid(wx, wy)
@@ -144,30 +140,42 @@ class WorldModelNode(Node):
         sx, sy, yaw = self.own_pose
 
         for i, r in enumerate(msg.ranges):
-            if r < msg.range_min or r > msg.range_max:
+            if r < msg.range_min:
                 continue
 
-            # beam angle in world frame
             angle = yaw + msg.angle_min + i * msg.angle_increment
             dx = math.cos(angle)
             dy = math.sin(angle)
 
-            # march along ray marking free space
+            # determine how far to trace
+            if r >= msg.range_max:
+                max_range = msg.range_max
+            else:
+                max_range = r
+
+            # mark free space along the ray
+            last_gx, last_gy = None, None
             d = 0.0
-            max_range = min(r, 4.0)
 
             while d < max_range:
                 wx = sx + d * dx
                 wy = sy + d * dy
                 gx, gy = self.world_to_grid(wx, wy)
 
-                if self._in_bounds(gx, gy) and self.static_grid[gy][gx] == 0:
-                    val = self.grid[gy][gx]
-                    self.grid[gy][gx] = max(-5, val - 1)
+                # only update each cell once
+                if (gx, gy) != (last_gx, last_gy):
+                    if self._in_bounds(gx, gy) and self.static_grid[gy][gx] == 0:
+                        val = self.grid[gy][gx]
 
-                d += self.resolution
+                        # don't erase strong obstacles
+                        if val < 3:
+                            self.grid[gy][gx] = -2
 
-            # 🔥 THIS WAS MISSING
+                    last_gx, last_gy = gx, gy
+
+                d += self.resolution * 0.5
+
+            # mark obstacle
             if r < msg.range_max:
                 self.mark_occupied(sx + r * dx, sy + r * dy)
 
