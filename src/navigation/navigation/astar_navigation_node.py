@@ -131,7 +131,6 @@ class AStarNavigationNode(Node):
             return
 
         if self._cached_grid is None:
-            self.get_logger().warn(f'[{self.uav_id}] no grid yet, waiting...')
             return
 
         width = self._cached_grid.info.width
