@@ -11,7 +11,7 @@ class MapViewer(Node):
 
         self.subscription = self.create_subscription(
             OccupancyGrid,
-            '/x1/world_model/map',  # <-- adjust if needed
+            '/x1/world_model/grid',  # <-- adjust if needed
             self.callback,
             10
         )
@@ -27,7 +27,13 @@ class MapViewer(Node):
         self.ax.clear()
 
         # Plot map
-        self.ax.imshow(data, cmap='gray', origin='lower')
+        display = np.zeros_like(data, dtype=float)
+
+        display[data == -1] = 0.5   # unknown = gray
+        display[data == 0]  = 0.0   # free = black
+        display[data == 100] = 1.0  # occupied = white
+
+        self.ax.imshow(display, cmap='gray', origin='lower', vmin=0, vmax=1)
 
         self.ax.set_title("Occupancy Grid")
         self.ax.set_xlabel("X")

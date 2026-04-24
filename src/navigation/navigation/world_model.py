@@ -127,21 +127,13 @@ class WorldModelNode(Node):
             for dy in range(-r, r + 1):
                 nx, ny = gx + dx, gy + dy
                 if self._in_bounds(nx, ny):
-                    self.grid[ny][nx] = 1
+                    if self.static_grid[ny][nx] == 0:
+                        self.grid[ny][nx] = max(3, self.grid[ny][nx] + 2)
 
     def mark_free(self, wx, wy):
         gx, gy = self.world_to_grid(wx, wy)
         if self._in_bounds(gx, gy) and self.static_grid[gy][gx] == 0:
             self.grid[gy][gx] = 0
-
-    def _clear_dynamic_obstacle(self, wx, wy):
-        gx, gy = self.world_to_grid(wx, wy)
-        r = self.inflation_radius
-        for dx in range(-r, r + 1):
-            for dy in range(-r, r + 1):
-                nx, ny = gx + dx, gy + dy
-                if self._in_bounds(nx, ny) and self.static_grid[ny][nx] == 0:
-                    self.grid[ny][nx] = -1
 
     # ===== Sensor-Based Updates =====
 
@@ -162,16 +154,22 @@ class WorldModelNode(Node):
 
             # march along ray marking free space
             d = 0.0
-            while d < r - self.resolution:
+            max_range = min(r, 4.0)
+
+            while d < max_range:
                 wx = sx + d * dx
                 wy = sy + d * dy
                 gx, gy = self.world_to_grid(wx, wy)
+
                 if self._in_bounds(gx, gy) and self.static_grid[gy][gx] == 0:
-                    self.grid[gy][gx] = 0
+                    val = self.grid[gy][gx]
+                    self.grid[gy][gx] = max(-5, val - 1)
+
                 d += self.resolution
 
-            # mark hit point as occupied
-            self.mark_occupied(sx + r * dx, sy + r * dy)
+            # 🔥 THIS WAS MISSING
+            if r < msg.range_max:
+                self.mark_occupied(sx + r * dx, sy + r * dy)
 
     # ===== Dynamic Obstacles =====
 
@@ -188,7 +186,6 @@ class WorldModelNode(Node):
 
         if uav_id in self.dynamic_obstacles:
             old_x, old_y = self.dynamic_obstacles[uav_id]
-            self._clear_dynamic_obstacle(old_x, old_y)
 
         self.mark_occupied(x, y)
         self.dynamic_obstacles[uav_id] = (x, y)
@@ -218,7 +215,13 @@ class WorldModelNode(Node):
         msg.info.origin.orientation.w = 1.0
         flat = []
         for row in self.grid:
-            flat.extend(row)
+            for val in row:
+                if val >= 2:
+                    flat.append(100)   # occupied
+                elif val <= -2:
+                    flat.append(0)     # free
+                else:
+                    flat.append(-1)    # unknown
         msg.data = flat
         self._grid_pub.publish(msg)
 
