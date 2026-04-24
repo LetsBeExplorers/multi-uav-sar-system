@@ -223,7 +223,6 @@ class AStarNavigationNode(Node):
             return 0 <= gx < width and 0 <= gy < height
 
         def is_free(gx, gy):
-            # -1 (unknown) and 0 (free) are passable; 1 (occupied) is not
             return grid_flat[gy * width + gx] <= 0
 
         def heuristic(a, b):

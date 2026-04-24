@@ -161,7 +161,16 @@ class PathExecutorNode(Node):
                 return
 
         # steer toward lookahead point for smooth motion
-        target_index = min(self.current_index + self.lookahead, len(self.current_path) - 1)
+        lookahead = self.lookahead
+        for k in range(1, min(self.lookahead, len(self.current_path) - self.current_index - 1)):
+            ax, ay = self.current_path[self.current_index + k - 1]
+            bx, by = self.current_path[self.current_index + k]
+            cx, cy = self.current_path[self.current_index + k + 1]
+            if (bx - ax, by - ay) != (cx - bx, cy - by):
+                lookahead = k
+                break
+
+        target_index = min(self.current_index + lookahead, len(self.current_path) - 1)
         tx, ty = self.current_path[target_index]
         dx = tx - self.uav_x
         dy = ty - self.uav_y
