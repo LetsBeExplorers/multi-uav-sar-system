@@ -109,7 +109,7 @@ class MissionManager(Node):
     # ===== Operator Interface =====
 
     def send_start(self):
-        if self.mission_state != 'IDLE':
+        if self.mission_state == 'RUNNING':
             print('Mission already running')
             return
         self._wait_for_subscribers(self._start_pub)
