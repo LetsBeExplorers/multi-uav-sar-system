@@ -201,11 +201,7 @@ class AStarNavigationNode(Node):
                 self.replan_count += 1
                 self._plan()
                 if self.current_path is None:
-                    # Replan failed — almost always a dynamic obstacle (other UAV) in the
-                    # path. Restore the old path so the executor keeps moving while the
-                    # blocker clears; the replan timer will retry on the next tick.
-                    self.current_path = saved
-                return
+                    return
 
     # ===== Core Algorithm =====
 

@@ -198,7 +198,13 @@ class WorldModelNode(Node):
             old_x, old_y = self.dynamic_obstacles[uav_id]
             self.mark_free(old_x, old_y)
 
-        self.mark_occupied(x, y)
+        gx, gy = self.world_to_grid_center(x, y)
+
+        for dx, dy in [(0,0)]:
+            nx, ny = gx + dx, gy + dy
+            if self._in_bounds(nx, ny):
+                self.grid[ny][nx] = 4
+        
         self.dynamic_obstacles[uav_id] = (x, y)
 
         if self.own_pose is not None:
