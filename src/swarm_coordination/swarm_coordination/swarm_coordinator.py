@@ -180,11 +180,17 @@ class SwarmCoordinator(Node):
 
         self.coverage_waypoints_visited += 1
 
-        if self.coverage_waypoints_visited % 10 == 0:
-            self._publish_status(
-                f'[{self.uav_id}] PROGRESS: '
-                f'{self.coverage_waypoints_visited}/{self.coverage_waypoints_total}'
-            )
+        # First waypoint is transit-to-start; coverage accrues on the legs between waypoints.
+        assigned_area = (self.x_end - self.x_start) * (self.area[3] - self.area[2])
+        legs_done = max(0, self.coverage_waypoints_visited - 1)
+        total_legs = max(1, self.coverage_waypoints_total - 1)
+        area_covered = (legs_done / total_legs) * assigned_area
+
+        self._publish_status(
+            f'[{self.uav_id}] PROGRESS: '
+            f'{self.coverage_waypoints_visited}/{self.coverage_waypoints_total} '
+            f'AREA: {area_covered:.1f}/{assigned_area:.1f}'
+        )
 
         self._check_coverage_events()
 

@@ -30,6 +30,7 @@ class MissionManager(Node):
         self.mission_state = 'IDLE'
         self.uav_states = {uid: 'IDLE' for uid in self.uav_ids}
         self.uav_coverage = {uid: 0.0 for uid in self.uav_ids}
+        self.uav_area = {uid: (0.0, 0.0) for uid in self.uav_ids}  # (covered, assigned) m²
 
         # ===== Publishers =====
         self._start_pub = self.create_publisher(Empty, '/mission/start', 10)
@@ -56,13 +57,17 @@ class MissionManager(Node):
 
         if 'PROGRESS' in text:
             try:
-                # Format: "[x1] PROGRESS: 50/100"
+                # Format: "[x1] PROGRESS: 50/100 AREA: 200.0/400.0"
                 uav_id = text.split(']')[0].lstrip('[')
-                prog = text.split('PROGRESS:')[1].strip()
+                prog = text.split('PROGRESS:')[1].split('AREA:')[0].strip()
                 visited, total = prog.split('/')
                 if int(total) > 0:
                     self.uav_coverage[uav_id] = int(visited) / int(total)
                     self._publish_coverage()
+                if 'AREA:' in text:
+                    area = text.split('AREA:')[1].strip()
+                    covered, assigned = area.split('/')
+                    self.uav_area[uav_id] = (float(covered), float(assigned))
             except (IndexError, ValueError):
                 pass
 
@@ -92,7 +97,11 @@ class MissionManager(Node):
             for uid in self.uav_ids:
                 state = self.uav_states.get(uid, '-')
                 cov = self.uav_coverage.get(uid, 0.0)
-                print(f'{uid} | {state:<12} | coverage: {cov * 100:.1f}%')
+                covered, assigned = self.uav_area.get(uid, (0.0, 0.0))
+                print(
+                    f'{uid} | {state:<12} | coverage: {cov * 100:5.1f}% '
+                    f'| area: {covered:6.1f} / {assigned:6.1f} m²'
+                )
 
         print('\nCommands: start | stop | exit')
 
@@ -106,6 +115,7 @@ class MissionManager(Node):
         self.mission_state = 'RUNNING'
         self.uav_states = {uid: 'IDLE' for uid in self.uav_ids}
         self.uav_coverage = {uid: 0.0 for uid in self.uav_ids}
+        self.uav_area = {uid: (0.0, 0.0) for uid in self.uav_ids}
         self._start_pub.publish(Empty())
         self.get_logger().debug('START sent')
 
