@@ -124,6 +124,25 @@ class AStarNavigationNode(Node):
 
     # ===== Planning =====
 
+    def _find_nearest_free(self, goal, grid_flat, width):
+        height = len(grid_flat) // width
+        gx, gy = goal
+
+        # search outward from goal in a small radius
+        for radius in range(1, 4):
+            for dx in range(-radius, radius + 1):
+                for dy in range(-radius, radius + 1):
+                    nx, ny = gx + dx, gy + dy
+
+                    # stay inside grid bounds
+                    if 0 <= nx < width and 0 <= ny < height:
+                        # free or unknown cell (<= 0) is allowed
+                        if grid_flat[ny * width + nx] <= 0:
+                            return (nx, ny)
+
+        # fallback: return original goal if nothing found
+        return goal
+
     def _plan(self):
         if not self.waypoints or self.current_pose is None:
             return
@@ -147,6 +166,9 @@ class AStarNavigationNode(Node):
 
         start = w2g(*self.current_pose)
         goal = w2g(*self.waypoints[self.waypoint_index])
+
+        # adjust goal if it's blocked (e.g., another UAV is sitting there)
+        goal = self._find_nearest_free(goal, grid_flat, width)
         path = self._astar(start, goal, grid_flat, width)
 
         if path is None:
