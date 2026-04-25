@@ -59,15 +59,16 @@ class MissionManager(Node):
             try:
                 # Format: "[x1] PROGRESS: 50/100 AREA: 200.0/400.0"
                 uav_id = text.split(']')[0].lstrip('[')
-                prog = text.split('PROGRESS:')[1].split('AREA:')[0].strip()
-                visited, total = prog.split('/')
-                if int(total) > 0:
-                    self.uav_coverage[uav_id] = int(visited) / int(total)
-                    self._publish_coverage()
                 if 'AREA:' in text:
                     area = text.split('AREA:')[1].strip()
                     covered, assigned = area.split('/')
-                    self.uav_area[uav_id] = (float(covered), float(assigned))
+                    covered_f = float(covered)
+                    assigned_f = float(assigned)
+                    self.uav_area[uav_id] = (covered_f, assigned_f)
+                    # grid coverage (monotonic) — route progress resets each phase
+                    if assigned_f > 0:
+                        self.uav_coverage[uav_id] = covered_f / assigned_f
+                        self._publish_coverage()
             except (IndexError, ValueError):
                 pass
 
@@ -99,7 +100,7 @@ class MissionManager(Node):
                 cov = self.uav_coverage.get(uid, 0.0)
                 covered, assigned = self.uav_area.get(uid, (0.0, 0.0))
                 print(
-                    f'{uid} | {state:<12} | route: {cov * 100:5.1f}% '
+                    f'{uid} | {state:<12} | coverage: {cov * 100:5.1f}% '
                     f'| area: {covered:6.1f} / {assigned:6.1f} m²'
                 )
 
