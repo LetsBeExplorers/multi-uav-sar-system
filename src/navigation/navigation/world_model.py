@@ -68,8 +68,7 @@ class WorldModelNode(Node):
 
         # ===== Publishers =====
         self._event_pub = self.create_publisher(FSMEvent, f'/{self.uav_id}/fsm/event', 10)
-        self._grid_pub = self.create_publisher(
-            OccupancyGrid, f'/{self.uav_id}/world_model/grid', qos_transient)
+        self._grid_pub = self.create_publisher(OccupancyGrid, f'/{self.uav_id}/world_model/grid', qos_transient)
 
         # ===== Subscribers =====
         self.create_subscription(
