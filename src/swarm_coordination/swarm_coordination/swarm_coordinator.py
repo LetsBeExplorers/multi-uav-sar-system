@@ -44,7 +44,7 @@ class SwarmCoordinator(Node):
                 ('num_uavs', 3),
                 ('area_bounds', [-10, 10, -10, 10]),
                 ('rows', 3),
-                ('threshold', 0.95),
+                ('threshold', 0.90),
                 ('resolution', 1.0),
                 ('coverage_radius', 1.0),  # sensor footprint radius (m) for cell marking
             ]
@@ -267,14 +267,14 @@ class SwarmCoordinator(Node):
 
             self.last_coverage = coverage
 
-            # if not good enough AND still improving → refine again
+            # only refine again if needed
             if coverage < self.threshold and self.stall_count < 2:
                 self.get_logger().info(
                     f'[{self.uav_id}] Refining again (coverage={coverage:.2f})'
                 )
-            self.coverage_waypoints_visited = 0
-            self._publish_refinement_waypoints()
-            return
+                self.coverage_waypoints_visited = 0
+                self._publish_refinement_waypoints()
+                return
 
             # otherwise: we are done (either reached threshold OR stalled)
             if others_need_help:
