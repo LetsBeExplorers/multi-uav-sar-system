@@ -74,6 +74,8 @@ class SwarmCoordinator(Node):
         self.coverage_waypoints_visited = 0
         self.coverage_map = {}          # uav_id → coverage_ratio
         self.run_id = int(time.time())
+        self.last_coverage = 0.0
+        self.stall_count = 0
 
         # grid cells visited; persists across SEARCHING → REFINING
         self.visited_cells = set()
@@ -145,10 +147,14 @@ class SwarmCoordinator(Node):
             self._reset_coverage()
             self.visited_cells = set()  # fresh mission
             self._publish_search_waypoints()
+            self.last_coverage = 0.0
+            self.stall_count = 0
 
         elif self.current_mode == 'REFINING':
             self._reset_coverage()
             self._publish_refinement_waypoints()
+            self.last_coverage = 0.0
+            self.stall_count = 0
 
         elif self.current_mode == 'ASSISTING':
             self._reset_coverage()
@@ -250,13 +256,27 @@ class SwarmCoordinator(Node):
                 self._publish_event('REGION_COMPLETE', value=coverage)
 
         elif self.current_mode == 'REFINING':
-            # DO NOT leave until this UAV meets threshold
-            if coverage < self.threshold:
-                # run another refinement pass
-                self._publish_refinement_waypoints()
-                return
 
-            # now we are done locally → can help others
+            # measure improvement
+            improvement = coverage - self.last_coverage
+
+            if improvement < 0.01:  # less than 1% improvement
+                self.stall_count += 1
+            else:
+                self.stall_count = 0
+
+            self.last_coverage = coverage
+
+            # if not good enough AND still improving → refine again
+            if coverage < self.threshold and self.stall_count < 2:
+                self.get_logger().info(
+                    f'[{self.uav_id}] Refining again (coverage={coverage:.2f})'
+                )
+            self.coverage_waypoints_visited = 0
+            self._publish_refinement_waypoints()
+            return
+
+            # otherwise: we are done (either reached threshold OR stalled)
             if others_need_help:
                 self._publish_event('REFINEMENT_COMPLETE', value=coverage)
             else:
