@@ -43,8 +43,7 @@ class UAVStateManager(Node):
         # ===== Subscribers =====
         self.create_subscription(Empty, '/mission/start', self._on_mission_start, 10)
         self.create_subscription(Empty, '/mission/stop', self._on_mission_stop, 10)
-        self.create_subscription(
-            FSMEvent, f'/{self.uav_id}/fsm/event', self._on_fsm_event, 10)
+        self.create_subscription(FSMEvent, f'/{self.uav_id}/fsm/event', self._on_fsm_event, 10)
 
         # Publish initial state so other nodes see IDLE on startup
         self._publish_state()
