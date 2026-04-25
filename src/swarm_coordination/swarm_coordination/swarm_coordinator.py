@@ -238,6 +238,7 @@ class SwarmCoordinator(Node):
             self.coverage_map[uid] = ratio
 
     def _check_coverage_events(self):
+        self._publish_status(f'[{self.uav_id}] CHECK CALLED MODE={self.current_mode}')
         if self.coverage_waypoints_total == 0:
             return
         if self.coverage_waypoints_visited < self.coverage_waypoints_total:
@@ -266,9 +267,10 @@ class SwarmCoordinator(Node):
                 self.stall_count = 0
 
             self.last_coverage = coverage
+            self._publish_status(f'[{self.uav_id}] RAW COVERAGE: {coverage:.4f}')
 
             # only refine again if needed
-            if coverage < self.threshold and self.stall_count < 2:
+            if coverage + 1e-6 < self.threshold and self.stall_count < 2:
                 self.get_logger().info(
                     f'[{self.uav_id}] Refining again (coverage={coverage:.2f})'
                 )

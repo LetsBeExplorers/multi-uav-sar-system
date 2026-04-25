@@ -31,7 +31,7 @@ def generate_launch_description():
                 name='uav_state_manager_' + uav,
                 parameters=[{
                     'uav_id': uav,
-                    'threshold': 0.95,
+                    'threshold': 0.90,
                 }]
             )
         )
@@ -47,7 +47,7 @@ def generate_launch_description():
                     'num_uavs': len(uavs),
                     'area_bounds': [-10, 10, -10, 10],
                     'rows': 7,
-                    'threshold': 0.95,
+                    'threshold': 0.90,
                 }]
             )
         )

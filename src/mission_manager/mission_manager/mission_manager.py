@@ -18,7 +18,7 @@ class MissionManager(Node):
             namespace='',
             parameters=[
                 ('num_uavs', 3),
-                ('threshold', 0.95),
+                ('threshold', 0.90),
             ]
         )
 

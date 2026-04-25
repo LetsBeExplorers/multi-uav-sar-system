@@ -57,6 +57,7 @@ class UAVStateManager(Node):
         self._handle_event('MISSION_STOP')
 
     def _on_fsm_event(self, msg):
+        self.get_logger().info(f"RECEIVED EVENT: {msg.event}")
         self._handle_event(msg.event, value=msg.value)
 
     # ===== Core FSM =====
