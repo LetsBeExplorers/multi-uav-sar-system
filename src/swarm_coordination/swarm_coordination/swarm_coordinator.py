@@ -45,6 +45,8 @@ class SwarmCoordinator(Node):
                 ('area_bounds', [-10, 10, -10, 10]),
                 ('rows', 3),
                 ('threshold', 0.90),
+                ('assist_threshold', 0.80),  # peer below this → worth assisting
+                ('completion_wait_sec', 1.5),  # brief sync hover before deciding
                 ('resolution', 1.0),
                 ('coverage_radius', 1.0),  # sensor footprint radius (m) for cell marking
             ]
@@ -55,6 +57,8 @@ class SwarmCoordinator(Node):
         self.area = self.get_parameter('area_bounds').value
         self.rows = self.get_parameter('rows').value
         self.threshold = self.get_parameter('threshold').value
+        self.assist_threshold = self.get_parameter('assist_threshold').value
+        self.completion_wait_sec = self.get_parameter('completion_wait_sec').value
         self.resolution = self.get_parameter('resolution').value
         self.coverage_radius = self.get_parameter('coverage_radius').value
 
@@ -76,6 +80,7 @@ class SwarmCoordinator(Node):
         self.run_id = int(time.time())
         self.last_coverage = 0.0
         self.stall_count = 0
+        self._completion_timer = None  # active during the post-refine sync hover
 
         # grid cells visited; persists across SEARCHING → REFINING
         self.visited_cells = set()
@@ -131,6 +136,11 @@ class SwarmCoordinator(Node):
             return
 
         self.current_mode = msg.state
+
+        # leaving REFINING mid-hover invalidates the pending decision
+        if self._completion_timer is not None and self.current_mode != 'REFINING':
+            self.destroy_timer(self._completion_timer)
+            self._completion_timer = None
 
         if self.current_mode in ('VERIFYING', 'TARGET_LOCK'):
             self.is_paused = True
@@ -197,6 +207,14 @@ class SwarmCoordinator(Node):
         slice_width = (xmax - xmin) / self.num_uavs
         tx_start = xmin + target_index * slice_width
         tx_end = xmin + (target_index + 1) * slice_width
+
+        # crude split: take only the half of target's slice closest to our own
+        # slice — peer keeps sweeping the far half, so we don't redo their work
+        midx = (tx_start + tx_end) / 2
+        if self.uav_index < target_index:
+            tx_end = midx
+        else:
+            tx_start = midx
 
         poses = _lawnmower(
             tx_start, tx_end,
@@ -278,17 +296,37 @@ class SwarmCoordinator(Node):
                 self._publish_refinement_waypoints()
                 return
 
-            # otherwise: we are done (either reached threshold OR stalled)
-            if others_need_help:
-                self._publish_event('REFINEMENT_COMPLETE', value=coverage)
-            else:
-                self._publish_event('ALL_DRONES_DONE')
+            # done refining — hover briefly so peer coverage settles before deciding
+            # whether to assist (low coverage on peer) or go home (peer close enough)
+            if self._completion_timer is None:
+                self._completion_timer = self.create_timer(
+                    self.completion_wait_sec, self._on_completion_timeout
+                )
 
         elif self.current_mode == 'ASSISTING':
             if not others_need_help:
                 self._publish_event('ALL_DRONES_DONE')
             else:
                 self._publish_event('ASSIST_COMPLETE')
+
+    def _on_completion_timeout(self):
+        self.destroy_timer(self._completion_timer)
+        self._completion_timer = None
+
+        # state changed during the hover (mission stop, detection, etc) — skip
+        if self.current_mode != 'REFINING':
+            return
+
+        other = {uid: r for uid, r in self.coverage_map.items() if uid != self.uav_id}
+        # peer below assist_threshold means substantial work left → worth splitting
+        peer_needs_assist = bool(other) and any(
+            r < self.assist_threshold for r in other.values()
+        )
+
+        if peer_needs_assist:
+            self._publish_event('REFINEMENT_COMPLETE', value=self.last_coverage)
+        else:
+            self._publish_event('ALL_DRONES_DONE')
 
     # ===== Helpers =====
 
