@@ -10,13 +10,17 @@ from sar_msgs.msg import FSMEvent, MissionCoverage, UAVState
 from std_msgs.msg import Empty, String
 
 
-def _lawnmower(x_start, x_end, ymin, ymax, rows):
-    """Boustrophedon sweep over a rectangular region, alternating row direction."""
+def _lawnmower(x_start, x_end, ymin, ymax, rows, reverse=False):
+    """Boustrophedon sweep. reverse=True starts at the top-right corner instead of bottom-left."""
     poses = []
     row_spacing = (ymax - ymin) / max(rows - 1, 1)
-    for row in range(rows):
-        y = ymin + row * row_spacing
-        xs = [x_start, x_end] if row % 2 == 0 else [x_end, x_start]
+    for i in range(rows):
+        if reverse:
+            y = ymax - i * row_spacing
+            xs = [x_end, x_start] if i % 2 == 0 else [x_start, x_end]
+        else:
+            y = ymin + i * row_spacing
+            xs = [x_start, x_end] if i % 2 == 0 else [x_end, x_start]
         for x in xs:
             p = Pose()
             p.position.x = float(x)
@@ -167,10 +171,12 @@ class SwarmCoordinator(Node):
         )
 
     def _publish_refinement_waypoints(self):
+        # start from the top-right where SEARCHING ended, snake back down
         poses = _lawnmower(
             self.x_start, self.x_end,
             self.area[2], self.area[3],
-            self.rows * 2
+            self.rows * 2,
+            reverse=True
         )
         self._send_waypoints(poses)
 
@@ -236,15 +242,24 @@ class SwarmCoordinator(Node):
 
         # grid coverage so the threshold gate to REFINING fires on sparse rows
         coverage = len(self.visited_cells) / self.total_cells if self.total_cells else 0.0
+        other = {uid: r for uid, r in self.coverage_map.items() if uid != self.uav_id}
+        others_need_help = bool(other) and any(r < self.threshold for r in other.values())
 
         if self.current_mode == 'SEARCHING':
-            self._publish_event('REGION_COMPLETE', value=coverage)
+            # below threshold → REFINING; above threshold and nobody to help → done
+            if coverage >= self.threshold and not others_need_help:
+                self._publish_event('ALL_DRONES_DONE')
+            else:
+                self._publish_event('REGION_COMPLETE', value=coverage)
 
         elif self.current_mode == 'REFINING':
-            self._publish_event('REFINEMENT_COMPLETE', value=coverage)
+            if others_need_help:
+                self._publish_event('REFINEMENT_COMPLETE', value=coverage)
+            else:
+                self._publish_event('ALL_DRONES_DONE')
 
         elif self.current_mode == 'ASSISTING':
-            if all(r >= self.threshold for r in self.coverage_map.values()):
+            if not others_need_help:
                 self._publish_event('ALL_DRONES_DONE')
             else:
                 self._publish_event('ASSIST_COMPLETE')
