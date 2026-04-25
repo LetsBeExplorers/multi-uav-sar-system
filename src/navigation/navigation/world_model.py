@@ -200,11 +200,11 @@ class WorldModelNode(Node):
 
         gx, gy = self.world_to_grid_center(x, y)
 
-        for dx, dy in [(0,0)]:
+        for dx, dy in [(0,0), (1,0), (-1,0), (0,1), (0,-1)]:
             nx, ny = gx + dx, gy + dy
             if self._in_bounds(nx, ny):
                 self.grid[ny][nx] = 4
-        
+
         self.dynamic_obstacles[uav_id] = (x, y)
 
         if self.own_pose is not None:
