@@ -55,7 +55,7 @@ class WorldModelNode(Node):
         obs_flat = self.get_parameter('static_obstacles').value
         for i in range(0, len(obs_flat) - 1, 2):
             wx, wy = float(obs_flat[i]), float(obs_flat[i + 1])
-            gx, gy = self.world_to_grid(wx, wy)
+            gx, gy = self.world_to_grid_center(wx, wy)
             if self._in_bounds(gx, gy):
                 self.static_grid[gy][gx] = 1
                 self.grid[gy][gx] = 4
@@ -129,7 +129,7 @@ class WorldModelNode(Node):
                     self.grid[gy][gx] = 4
 
     def mark_free(self, wx, wy):
-        gx, gy = self.world_to_grid(wx, wy)
+        gx, gy = self.world_to_grid_center(wx, wy)
         if self._in_bounds(gx, gy) and self.static_grid[gy][gx] == 0:
             self.grid[gy][gx] = 0
 
