@@ -110,6 +110,10 @@ class PathExecutorNode(Node):
         if not msg.poses:
             return
         self.current_path = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
+        # extend the path so we end at actual home, not the grid boundary
+        if self.is_returning and self.home_x is not None:
+            if self.current_path[-1] != (self.home_x, self.home_y):
+                self.current_path.append((self.home_x, self.home_y))
         self.current_index = min(
             range(len(self.current_path)),
             key=lambda i: math.hypot(
