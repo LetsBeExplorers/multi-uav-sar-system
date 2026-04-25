@@ -95,13 +95,10 @@ class SwarmCoordinator(Node):
         self._status_pub = self.create_publisher(String, '/mission/status', 10)
 
         # ===== Subscribers =====
-        self.create_subscription(UAVState, '/uav/state', self._on_fsm_state_change, 10)
         self.create_subscription(
-            Empty,
-            f'/{self.uav_id}/nav/reached_coverage_waypoint',
-            self._on_waypoint_reached,
-            10
-        )
+            UAVState, '/uav/state', self._on_fsm_state_change, 10)
+        self.create_subscription(
+            Empty, f'/{self.uav_id}/nav/reached_coverage_waypoint', self._on_waypoint_reached, 10)
         self.create_subscription(
             MissionCoverage, '/mission/coverage', self._on_coverage_update, 10)
         self.create_subscription(
