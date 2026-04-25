@@ -99,7 +99,7 @@ class MissionManager(Node):
                 cov = self.uav_coverage.get(uid, 0.0)
                 covered, assigned = self.uav_area.get(uid, (0.0, 0.0))
                 print(
-                    f'{uid} | {state:<12} | coverage: {cov * 100:5.1f}% '
+                    f'{uid} | {state:<12} | route: {cov * 100:5.1f}% '
                     f'| area: {covered:6.1f} / {assigned:6.1f} m²'
                 )
 
