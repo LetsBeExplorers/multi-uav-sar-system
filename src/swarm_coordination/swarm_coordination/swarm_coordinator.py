@@ -1,6 +1,7 @@
 import time
 
 from geometry_msgs.msg import Pose, PoseArray
+from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
@@ -40,6 +41,8 @@ class SwarmCoordinator(Node):
                 ('area_bounds', [-10, 10, -10, 10]),
                 ('rows', 3),
                 ('threshold', 0.95),
+                ('resolution', 1.0),
+                ('coverage_radius', 1.0),  # sensor footprint radius (m) for cell marking
             ]
         )
 
@@ -48,6 +51,8 @@ class SwarmCoordinator(Node):
         self.area = self.get_parameter('area_bounds').value
         self.rows = self.get_parameter('rows').value
         self.threshold = self.get_parameter('threshold').value
+        self.resolution = self.get_parameter('resolution').value
+        self.coverage_radius = self.get_parameter('coverage_radius').value
 
         # ===== Region assignment =====
         uav_ids = [f'x{i + 1}' for i in range(self.num_uavs)]
@@ -65,6 +70,12 @@ class SwarmCoordinator(Node):
         self.coverage_waypoints_visited = 0
         self.coverage_map = {}          # uav_id → coverage_ratio
         self.run_id = int(time.time())
+
+        # grid cells visited; persists across SEARCHING → REFINING
+        self.visited_cells = set()
+        self.slice_w_cells = int((self.x_end - self.x_start) / self.resolution)
+        self.slice_h_cells = int((self.area[3] - self.area[2]) / self.resolution)
+        self.total_cells = self.slice_w_cells * self.slice_h_cells
 
         qos_transient = QoSProfile(
             depth=1,
@@ -89,6 +100,26 @@ class SwarmCoordinator(Node):
         )
         self.create_subscription(
             MissionCoverage, '/mission/coverage', self._on_coverage_update, 10)
+        self.create_subscription(
+            Odometry, f'/{self.uav_id}/state/odom', self._on_odom, 10)
+
+    # ===== Coverage Tracking (grid-based) =====
+
+    def _on_odom(self, msg):
+        x = msg.pose.pose.position.x
+        y = msg.pose.pose.position.y
+        gx_c = int((x - self.x_start) / self.resolution)
+        gy_c = int((y - self.area[2]) / self.resolution)
+        # mark all cells within the sensor footprint, clipped to the assigned slice
+        r = int(self.coverage_radius / self.resolution)
+        r_sq = r * r
+        for dy in range(-r, r + 1):
+            for dx in range(-r, r + 1):
+                if dx * dx + dy * dy > r_sq:
+                    continue
+                gx, gy = gx_c + dx, gy_c + dy
+                if 0 <= gx < self.slice_w_cells and 0 <= gy < self.slice_h_cells:
+                    self.visited_cells.add((gx, gy))
 
     # ===== FSM Reaction =====
 
@@ -111,6 +142,7 @@ class SwarmCoordinator(Node):
 
         if self.current_mode == 'SEARCHING':
             self._reset_coverage()
+            self.visited_cells = set()  # fresh mission
             self._publish_search_waypoints()
 
         elif self.current_mode == 'REFINING':
@@ -180,11 +212,9 @@ class SwarmCoordinator(Node):
 
         self.coverage_waypoints_visited += 1
 
-        # First waypoint is transit-to-start; coverage accrues on the legs between waypoints.
         assigned_area = (self.x_end - self.x_start) * (self.area[3] - self.area[2])
-        legs_done = max(0, self.coverage_waypoints_visited - 1)
-        total_legs = max(1, self.coverage_waypoints_total - 1)
-        area_covered = (legs_done / total_legs) * assigned_area
+        coverage_ratio = len(self.visited_cells) / self.total_cells if self.total_cells else 0.0
+        area_covered = coverage_ratio * assigned_area
 
         self._publish_status(
             f'[{self.uav_id}] PROGRESS: '
@@ -204,7 +234,8 @@ class SwarmCoordinator(Node):
         if self.coverage_waypoints_visited < self.coverage_waypoints_total:
             return
 
-        coverage = self.coverage_waypoints_visited / self.coverage_waypoints_total
+        # grid coverage so the threshold gate to REFINING fires on sparse rows
+        coverage = len(self.visited_cells) / self.total_cells if self.total_cells else 0.0
 
         if self.current_mode == 'SEARCHING':
             self._publish_event('REGION_COMPLETE', value=coverage)
