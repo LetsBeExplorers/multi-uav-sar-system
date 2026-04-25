@@ -250,6 +250,13 @@ class SwarmCoordinator(Node):
                 self._publish_event('REGION_COMPLETE', value=coverage)
 
         elif self.current_mode == 'REFINING':
+            # DO NOT leave until this UAV meets threshold
+            if coverage < self.threshold:
+                # run another refinement pass
+                self._publish_refinement_waypoints()
+                return
+
+            # now we are done locally → can help others
             if others_need_help:
                 self._publish_event('REFINEMENT_COMPLETE', value=coverage)
             else:
