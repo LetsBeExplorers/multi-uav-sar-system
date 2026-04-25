@@ -253,7 +253,14 @@ class AStarNavigationNode(Node):
                 return path
 
             for nb in neighbors(current):
-                tentative_g = g_score[current] + 1
+                step_cost = 1
+                nx, ny = nb
+                for ddx, ddy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    ax, ay = nx + ddx, ny + ddy
+                    if in_bounds(ax, ay) and grid_flat[ay * width + ax] > 0:
+                        step_cost = 10  # neighbor touches an obstacle — keep clearance
+                        break
+                tentative_g = g_score[current] + step_cost
                 if nb not in g_score or tentative_g < g_score[nb]:
                     came_from[nb] = current
                     g_score[nb] = tentative_g

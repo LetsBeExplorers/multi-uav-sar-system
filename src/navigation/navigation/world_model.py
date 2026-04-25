@@ -189,7 +189,6 @@ class WorldModelNode(Node):
         q = msg.pose.pose.orientation
         yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y ** 2 + q.z ** 2))
         self.own_pose = (x, y, yaw)
-        self.get_logger().info(f'own_pose: world=({x:.2f},{y:.2f}) grid=({int((x+10))},{int((y+10))})', throttle_duration_sec=1.0)
 
     def _on_dynamic_obstacle_update(self, uav_id, msg):
         x = msg.pose.pose.position.x
