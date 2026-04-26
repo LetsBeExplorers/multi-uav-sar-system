@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-from sar_msgs.msg import FSMEvent, UAVState
+from sar_msgs.msg import FSMEvent, UAVState, MissionCoverage
 from std_msgs.msg import Empty, String
 
 
@@ -23,17 +23,22 @@ class UAVStateManager(Node):
             parameters=[
                 ('uav_id', 'x1'),
                 ('threshold', 0.95),
+                ('assist_threshold', 0.80),
+                ('num_uavs', 3),
             ]
         )
 
         self.uav_id = self.get_parameter('uav_id').value
         self.threshold = self.get_parameter('threshold').value
+        self.assist_threshold = self.get_parameter('assist_threshold').value
+        self.num_uavs = self.get_parameter('num_uavs').value
 
         # ===== State =====
         self.current_state = 'IDLE'
         self.previous_state = ''
         self.recovery_attempts = 0
         self.max_recovery_attempts = 3
+        self.coverage_map = {}
 
         # ===== Publishers =====
         self._state_pub = self.create_publisher(UAVState, '/uav/state', 10)
@@ -44,6 +49,7 @@ class UAVStateManager(Node):
         self.create_subscription(Empty, '/mission/start', self._on_mission_start, 10)
         self.create_subscription(Empty, '/mission/stop', self._on_mission_stop, 10)
         self.create_subscription(FSMEvent, f'/{self.uav_id}/fsm/event', self._on_fsm_event, 10)
+        self.create_subscription(MissionCoverage, '/mission/coverage', self._on_coverage_update, 10)
 
         # Publish initial state so other nodes see IDLE on startup
         self._publish_state()
@@ -59,6 +65,10 @@ class UAVStateManager(Node):
     def _on_fsm_event(self, msg):
         self.get_logger().info(f"RECEIVED EVENT: {msg.event}")
         self._handle_event(msg.event, value=msg.value)
+
+    def _on_coverage_update(self, msg):
+        for uid, ratio in zip(msg.uav_ids, msg.coverage_ratios):
+            self.coverage_map[uid] = ratio
 
     # ===== Core FSM =====
 
@@ -112,23 +122,54 @@ class UAVStateManager(Node):
                 self._transition('RECOVERY')
 
         elif s == 'REFINING':
+
             if event == 'REFINEMENT_COMPLETE':
-                self._transition('ASSISTING')
+
+                if len(self.coverage_map) < self.num_uavs:
+                    return  # not enough info yet
+
+                others = {
+                    uid: r for uid, r in self.coverage_map.items()
+                    if uid != self.uav_id
+                }
+
+                if all(r >= self.assist_threshold for r in others.values()):
+                    self._transition('RETURNING')
+                else:
+                    self._transition('ASSISTING')
+
             elif event == 'ALL_DRONES_DONE':
                 self._transition('RETURNING')
+
             elif event == 'DETECTION_EVENT':
                 self._transition('VERIFYING')
+
             elif event in ('OFF_COURSE', 'PATH_FAILED', 'COLLISION_RISK', 'COMMS_LOSS'):
                 self._transition('RECOVERY')
 
         elif s == 'ASSISTING':
             if event == 'ALL_DRONES_DONE':
                 self._transition('RETURNING')
+
             elif event == 'ASSIST_COMPLETE':
-                # Re-emit ASSISTING so the coordinator picks a new target region
-                self._transition('ASSISTING')
+
+                if len(self.coverage_map) < self.num_uavs:
+                    return  # not enough info yet
+
+                others = {
+                    uid: r for uid, r in self.coverage_map.items()
+                    if uid != self.uav_id
+                }
+
+                if all(r >= self.threshold for r in others.values()):
+                    self._transition('RETURNING')
+                else:
+                    # Re-emit ASSISTING so the coordinator picks a new target region
+                    self._transition('ASSISTING')
+
             elif event == 'DETECTION_EVENT':
                 self._transition('VERIFYING')
+
             elif event in ('OFF_COURSE', 'PATH_FAILED', 'COLLISION_RISK', 'COMMS_LOSS'):
                 self._transition('RECOVERY')
 

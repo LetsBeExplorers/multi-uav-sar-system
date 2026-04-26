@@ -45,7 +45,6 @@ class SwarmCoordinator(Node):
                 ('area_bounds', [-10, 10, -10, 10]),
                 ('rows', 3),
                 ('threshold', 0.90),
-                ('assist_threshold', 0.80),  # peer below this → worth assisting
                 ('completion_wait_sec', 1.5),  # brief sync hover before deciding
                 ('resolution', 1.0),
                 ('coverage_radius', 1.0),  # sensor footprint radius (m) for cell marking
@@ -57,7 +56,6 @@ class SwarmCoordinator(Node):
         self.area = self.get_parameter('area_bounds').value
         self.rows = self.get_parameter('rows').value
         self.threshold = self.get_parameter('threshold').value
-        self.assist_threshold = self.get_parameter('assist_threshold').value
         self.completion_wait_sec = self.get_parameter('completion_wait_sec').value
         self.resolution = self.get_parameter('resolution').value
         self.coverage_radius = self.get_parameter('coverage_radius').value
@@ -200,10 +198,6 @@ class SwarmCoordinator(Node):
     def _publish_assistive_waypoints(self):
         other = {uid: r for uid, r in self.coverage_map.items() if uid != self.uav_id}
 
-        if not other or all(r >= self.threshold for r in other.values()):
-            self._publish_event('ALL_DRONES_DONE')
-            return
-
         target_id = min(other, key=other.get)
         target_index = int(target_id[1:]) - 1   # 'x1' → 0, 'x2' → 1, …
 
@@ -271,11 +265,7 @@ class SwarmCoordinator(Node):
         others_need_help = bool(other) and any(r < self.threshold for r in other.values())
 
         if self.current_mode == 'SEARCHING':
-            # below threshold → REFINING; above threshold and nobody to help → done
-            if coverage >= self.threshold and not others_need_help:
-                self._publish_event('ALL_DRONES_DONE')
-            else:
-                self._publish_event('REGION_COMPLETE', value=coverage)
+            self._publish_event('REGION_COMPLETE', value=coverage)
 
         elif self.current_mode == 'REFINING':
 
@@ -306,10 +296,7 @@ class SwarmCoordinator(Node):
                 )
 
         elif self.current_mode == 'ASSISTING':
-            if not others_need_help:
-                self._publish_event('ALL_DRONES_DONE')
-            else:
-                self._publish_event('ASSIST_COMPLETE')
+            self._publish_event('ASSIST_COMPLETE')
 
     def _on_completion_timeout(self):
         self.destroy_timer(self._completion_timer)
@@ -319,16 +306,7 @@ class SwarmCoordinator(Node):
         if self.current_mode != 'REFINING':
             return
 
-        other = {uid: r for uid, r in self.coverage_map.items() if uid != self.uav_id}
-        # peer below assist_threshold means substantial work left → worth splitting
-        peer_needs_assist = bool(other) and any(
-            r < self.assist_threshold for r in other.values()
-        )
-
-        if peer_needs_assist:
-            self._publish_event('REFINEMENT_COMPLETE', value=self.last_coverage)
-        else:
-            self._publish_event('ALL_DRONES_DONE')
+        self._publish_event('REFINEMENT_COMPLETE', value=self.last_coverage)
 
     # ===== Helpers =====
 
@@ -344,6 +322,19 @@ class SwarmCoordinator(Node):
         msg.timestamp = self.get_clock().now().nanoseconds / 1e9
         self._event_pub.publish(msg)
         self.get_logger().info(f'[{self.uav_id}] event → {event} (value={value:.2f})')
+
+    def _publish_coverage_status(self):
+        # 5Hz heartbeat so peers see fresh grid coverage between waypoint hits
+        if self.total_cells == 0 or self.current_mode in ('IDLE', 'RETURNING', 'EMERGENCY_STOP'):
+            return
+        assigned_area = (self.x_end - self.x_start) * (self.area[3] - self.area[2])
+        coverage_ratio = len(self.visited_cells) / self.total_cells
+        area_covered = coverage_ratio * assigned_area
+        self._publish_status(
+            f'[{self.uav_id}] PROGRESS: '
+            f'{self.coverage_waypoints_visited}/{max(self.coverage_waypoints_total, 1)} '
+            f'AREA: {area_covered:.1f}/{assigned_area:.1f}'
+        )
 
     def _publish_status(self, text: str):
         msg = String()
