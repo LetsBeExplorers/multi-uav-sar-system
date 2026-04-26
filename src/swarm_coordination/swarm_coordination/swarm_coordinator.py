@@ -106,8 +106,11 @@ class SwarmCoordinator(Node):
             Empty, f'/{self.uav_id}/nav/reached_coverage_waypoint', self._on_waypoint_reached, 10)
         self.create_subscription(
             MissionCoverage, '/mission/coverage', self._on_coverage_update, 10)
-        self.create_subscription(
-            Odometry, f'/{self.uav_id}/state/odom', self._on_odom, 10)
+        # subscribe to all peers' odom so cells they pass through our slice get marked
+        for i in range(self.num_uavs):
+            peer_id = f'x{i + 1}'
+            self.create_subscription(
+                Odometry, f'/{peer_id}/state/odom', self._on_odom, 10)
 
         # ===== Timers =====
         # 5Hz coverage heartbeat so peers see fresh values, not just per-waypoint
@@ -206,17 +209,13 @@ class SwarmCoordinator(Node):
         tx_start = xmin + target_index * slice_width
         tx_end = xmin + (target_index + 1) * slice_width
 
-        # crude split: take the half of target's slice closest to our own slice
-        midx = (tx_start + tx_end) / 2
-        if self.uav_index < target_index:
-            tx_end = midx
-        else:
-            tx_start = midx
-
+        # offset rows by half spacing so they fill gaps between peer's lawnmower
+        spacing = (self.area[3] - self.area[2]) / (self.rows * 2 - 1)
         poses = _lawnmower(
             tx_start, tx_end,
-            self.area[2], self.area[3],
-            self.rows
+            self.area[2] + spacing / 2,
+            self.area[3] - spacing / 2,
+            self.rows * 2 - 1,
         )
         self._send_waypoints(poses)
         self._publish_status(f'[{self.uav_id}] ASSISTING → {target_id}')
@@ -256,11 +255,19 @@ class SwarmCoordinator(Node):
         self._publish_status(f'[{self.uav_id}] CHECK CALLED MODE={self.current_mode}')
         if self.coverage_waypoints_total == 0:
             return
+
+        coverage = len(self.visited_cells) / self.total_cells if self.total_cells else 0.0
+
+        # mid-route cutoff: skip remaining waypoints once the relevant threshold is met
+        if self.current_mode in ('SEARCHING', 'REFINING') and coverage >= self.threshold:
+            self.coverage_waypoints_visited = self.coverage_waypoints_total
+        elif self.current_mode == 'ASSISTING':
+            peer = {uid: r for uid, r in self.coverage_map.items() if uid != self.uav_id}
+            if peer and all(r >= self.threshold for r in peer.values()):
+                self.coverage_waypoints_visited = self.coverage_waypoints_total
+
         if self.coverage_waypoints_visited < self.coverage_waypoints_total:
             return
-
-        # grid coverage so the threshold gate to REFINING fires on sparse rows
-        coverage = len(self.visited_cells) / self.total_cells if self.total_cells else 0.0
         other = {uid: r for uid, r in self.coverage_map.items() if uid != self.uav_id}
         others_need_help = bool(other) and any(r < self.threshold for r in other.values())
 
