@@ -111,6 +111,10 @@ class SwarmCoordinator(Node):
         self.create_subscription(
             Odometry, f'/{self.uav_id}/state/odom', self._on_odom, 10)
 
+        # ===== Timers =====
+        # 5Hz coverage heartbeat so peers see fresh values, not just per-waypoint
+        self.create_timer(0.2, self._publish_coverage_status)
+
     # ===== Coverage Tracking (grid-based) =====
 
     def _on_odom(self, msg):
@@ -208,8 +212,7 @@ class SwarmCoordinator(Node):
         tx_start = xmin + target_index * slice_width
         tx_end = xmin + (target_index + 1) * slice_width
 
-        # crude split: take only the half of target's slice closest to our own
-        # slice — peer keeps sweeping the far half, so we don't redo their work
+        # crude split: take the half of target's slice closest to our own slice
         midx = (tx_start + tx_end) / 2
         if self.uav_index < target_index:
             tx_end = midx
@@ -296,8 +299,7 @@ class SwarmCoordinator(Node):
                 self._publish_refinement_waypoints()
                 return
 
-            # done refining — hover briefly so peer coverage settles before deciding
-            # whether to assist (low coverage on peer) or go home (peer close enough)
+            # hover briefly so peer coverage settles before deciding assist vs home
             if self._completion_timer is None:
                 self._completion_timer = self.create_timer(
                     self.completion_wait_sec, self._on_completion_timeout
