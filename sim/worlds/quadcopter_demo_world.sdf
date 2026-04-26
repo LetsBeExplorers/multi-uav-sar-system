@@ -1,53 +1,43 @@
-<?xml version="1.0" ?>
-<sdf version="1.7">
-  <world name="quadcopter_world">
-
-    <!-- Physics -->
-    <physics type="ode"/>
-
-    <!-- Required plugins for Gazebo Sim -->
-    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
-    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
-    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
-    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+<sdf version='1.10'>
+  <world name='quadcopter_world'>
+    <physics type='ode'>
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1</real_time_factor>
+      <real_time_update_rate>1000</real_time_update_rate>
+    </physics>
+    <plugin name='gz::sim::systems::Physics' filename='gz-sim-physics-system'/>
+    <plugin name='gz::sim::systems::UserCommands' filename='gz-sim-user-commands-system'/>
+    <plugin name='gz::sim::systems::SceneBroadcaster' filename='gz-sim-scene-broadcaster-system'/>
+    <plugin name='gz::sim::systems::Sensors' filename='gz-sim-sensors-system'>
       <render_engine>ogre2</render_engine>
     </plugin>
-
-    <!-- Sky and ambient lighting -->
     <scene>
-      <ambient>0.4 0.4 0.4 1</ambient>
-      <background>0.7 0.85 1 1</background>
+      <ambient>0.400000006 0.400000006 0.400000006 1</ambient>
+      <background>0.699999988 0.850000024 1 1</background>
       <shadows>true</shadows>
     </scene>
-
-    <!-- Sun -->
-    <light type="directional" name="sun">
-      <pose>0 0 50 0 0 0</pose>
-      <diffuse>1 1 1 1</diffuse>
-      <specular>1 1 1 1</specular>
-      <attenuation>
-        <range>1000</range>
-        <constant>0.9</constant>
-        <linear>0.01</linear>
-        <quadratic>0.001</quadratic>
-      </attenuation>
-      <direction>-0.4 -0.2 -1</direction>
-      <cast_shadows>true</cast_shadows>
-    </light>
-
-    <!-- Ground plane -->
-    <model name="ground_plane">
+    <gravity>0 0 -9.8000000000000007</gravity>
+    <magnetic_field>5.5644999999999998e-06 2.2875799999999999e-05 -4.2388400000000002e-05</magnetic_field>
+    <atmosphere type='adiabatic'/>
+    <model name='ground_plane'>
       <static>true</static>
-      <link name="link">
-        <collision name="collision">
+      <link name='link'>
+        <collision name='collision'>
           <geometry>
             <plane>
               <normal>0 0 1</normal>
               <size>200 200</size>
             </plane>
           </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
         </collision>
-        <visual name="visual">
+        <visual name='visual'>
           <geometry>
             <plane>
               <normal>0 0 1</normal>
@@ -55,24 +45,37 @@
             </plane>
           </geometry>
           <material>
-            <ambient>0.3 0.3 0.3 1</ambient>
-            <diffuse>0.35 0.35 0.35 1</diffuse>
+            <ambient>0.300000012 0.300000012 0.300000012 1</ambient>
+            <diffuse>0.349999994 0.349999994 0.349999994 1</diffuse>
           </material>
         </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
       </link>
+      <pose>0 0 0 0 0 0</pose>
+      <self_collide>false</self_collide>
     </model>
-
-    <!-- ===== Landing Pads ===== -->
-    <!-- UAV1 Pad (Red) -->
-    <model name="pad_x1">
+    <model name='pad_x1'>
       <static>true</static>
       <pose>-3 -11 0 0 0 0</pose>
-      <link name="link">
-        <visual name="visual">
+      <link name='link'>
+        <visual name='visual'>
           <geometry>
             <cylinder>
-              <radius>0.3</radius>
-              <length>0.05</length>
+              <radius>0.29999999999999999</radius>
+              <length>0.050000000000000003</length>
             </cylinder>
           </geometry>
           <material>
@@ -80,19 +83,32 @@
             <diffuse>1 0 0 1</diffuse>
           </material>
         </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
       </link>
+      <self_collide>false</self_collide>
     </model>
-
-    <!-- UAV2 Pad (Green) -->
-    <model name="pad_x2">
+    <model name='pad_x2'>
       <static>true</static>
       <pose>0 -11 0 0 0 0</pose>
-      <link name="link">
-        <visual name="visual">
+      <link name='link'>
+        <visual name='visual'>
           <geometry>
             <cylinder>
-              <radius>0.3</radius>
-              <length>0.05</length>
+              <radius>0.29999999999999999</radius>
+              <length>0.050000000000000003</length>
             </cylinder>
           </geometry>
           <material>
@@ -100,19 +116,32 @@
             <diffuse>0 1 0 1</diffuse>
           </material>
         </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
       </link>
+      <self_collide>false</self_collide>
     </model>
-
-    <!-- UAV3 Pad (Blue) -->
-    <model name="pad_x3">
+    <model name='pad_x3'>
       <static>true</static>
       <pose>3 -11 0 0 0 0</pose>
-      <link name="link">
-        <visual name="visual">
+      <link name='link'>
+        <visual name='visual'>
           <geometry>
             <cylinder>
-              <radius>0.3</radius>
-              <length>0.05</length>
+              <radius>0.29999999999999999</radius>
+              <length>0.050000000000000003</length>
             </cylinder>
           </geometry>
           <material>
@@ -120,64 +149,45 @@
             <diffuse>0 0 1 1</diffuse>
           </material>
         </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
       </link>
+      <self_collide>false</self_collide>
     </model>
-
-    <!-- ===== UAVs ===== -->
-    <!-- UAV1 -->
     <include>
       <uri>file:///home/raytracer/projects/DASE4460/multi-uav-sar-system/sim/models/x3_lidar</uri>
       <name>x1</name>
       <pose>-3 -11 0.5 0 0 0</pose>
-      <plugin filename="gz-sim-velocity-control-system"
-              name="gz::sim::systems::VelocityControl"/>
-
-      <plugin
-        filename="gz-sim-odometry-publisher-system"
-        name="gz::sim::systems::OdometryPublisher">
-        <dimensions>3</dimensions>
-      </plugin>
     </include>
-
-    <!-- UAV2 -->
     <include>
       <uri>file:///home/raytracer/projects/DASE4460/multi-uav-sar-system/sim/models/x3_lidar</uri>
       <name>x2</name>
       <pose>0 -11 0.5 0 0 0</pose>
-      <plugin filename="gz-sim-velocity-control-system"
-              name="gz::sim::systems::VelocityControl"/>
-
-      <plugin
-        filename="gz-sim-odometry-publisher-system"
-        name="gz::sim::systems::OdometryPublisher">
-        <dimensions>3</dimensions>
-      </plugin>
     </include>
-
-    <!-- UAV3 -->
     <include>
       <uri>file:///home/raytracer/projects/DASE4460/multi-uav-sar-system/sim/models/x3_lidar</uri>
       <name>x3</name>
       <pose>3 -11 0.5 0 0 0</pose>
-      <plugin filename="gz-sim-velocity-control-system"
-              name="gz::sim::systems::VelocityControl"/>
-
-      <plugin
-        filename="gz-sim-odometry-publisher-system"
-        name="gz::sim::systems::OdometryPublisher">
-        <dimensions>3</dimensions>
-      </plugin>
     </include>
-
-    <model name="search_area_outline">
-      <static>true</static>  <!-- entire model is static -->
-
-      <!-- Bottom line -->
-      <link name="line_bottom">
-        <visual name="vis">
+    <model name='search_area_outline'>
+      <static>true</static>
+      <link name='line_bottom'>
+        <visual name='vis'>
           <geometry>
             <box>
-              <size>20 0.1 0.05</size> <!-- 20m wide, thin -->
+              <size>20 0.10000000000000001 0.050000000000000003</size>
             </box>
           </geometry>
           <material>
@@ -186,14 +196,25 @@
           </material>
         </visual>
         <pose>0 -10 0.01 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
       </link>
-
-      <!-- Top line -->
-      <link name="line_top">
-        <visual name="vis">
+      <link name='line_top'>
+        <visual name='vis'>
           <geometry>
             <box>
-              <size>20 0.1 0.05</size>
+              <size>20 0.10000000000000001 0.050000000000000003</size>
             </box>
           </geometry>
           <material>
@@ -202,14 +223,25 @@
           </material>
         </visual>
         <pose>0 10 0.01 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
       </link>
-
-      <!-- Left line -->
-      <link name="line_left">
-        <visual name="vis">
+      <link name='line_left'>
+        <visual name='vis'>
           <geometry>
             <box>
-              <size>0.1 20 0.05</size>
+              <size>0.10000000000000001 20 0.050000000000000003</size>
             </box>
           </geometry>
           <material>
@@ -218,14 +250,25 @@
           </material>
         </visual>
         <pose>-10 0 0.01 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
       </link>
-
-      <!-- Right line -->
-      <link name="line_right">
-        <visual name="vis">
+      <link name='line_right'>
+        <visual name='vis'>
           <geometry>
             <box>
-              <size>0.1 20 0.05</size>
+              <size>0.10000000000000001 20 0.050000000000000003</size>
             </box>
           </geometry>
           <material>
@@ -234,114 +277,356 @@
           </material>
         </visual>
         <pose>10 0 0.01 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
       </link>
+      <pose>0 0 0 0 0 0</pose>
+      <self_collide>false</self_collide>
     </model>
-
-    <!-- ===== OBSTACLES ===== -->
-
-    <model name="obs_2_2">
+    <model name='obs_2_2'>
       <static>true</static>
-      <link name="link">
+      <link name='link'>
         <pose>2 2 1 0 0 0</pose>
-        <collision name="collision">
+        <collision name='collision'>
           <geometry>
-            <box><size>1 1 2</size></box></geometry>
+            <box>
+              <size>1 1 2</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
         </collision>
-        <visual name="visual">
+        <visual name='visual'>
           <geometry>
-            <box><size>1 1 2</size></box></geometry>
-          <material><ambient>1 0 0 1</ambient></material>
+            <box>
+              <size>1 1 2</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 0 0 1</ambient>
+          </material>
         </visual>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
       </link>
+      <pose>0 0 0 0 0 0</pose>
+      <self_collide>false</self_collide>
     </model>
-
-    <model name="obs_2_4">
+    <model name='obs_2_4'>
       <static>true</static>
-      <link name="link">
+      <link name='link'>
         <pose>2 4 0.5 0 0 0</pose>
-        <collision name="collision">
-          <geometry><box><size>1 1 1</size></box></geometry>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
         </collision>
-        <visual name="visual">
-          <geometry><box><size>1 1 1</size></box></geometry>
-          <material><ambient>1 0 0 1</ambient></material>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 0 0 1</ambient>
+          </material>
         </visual>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
       </link>
+      <pose>0 0 0 0 0 0</pose>
+      <self_collide>false</self_collide>
     </model>
-
-    <model name="obs_5_3">
+    <model name='obs_5_3'>
       <static>true</static>
-      <link name="link">
+      <link name='link'>
         <pose>5 3 0.5 0 0 0</pose>
-        <collision name="collision">
-          <geometry><box><size>1 1 1</size></box></geometry>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
         </collision>
-        <visual name="visual">
-          <geometry><box><size>1 1 1</size></box></geometry>
-          <material><ambient>1 0 0 1</ambient></material>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 0 0 1</ambient>
+          </material>
         </visual>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
       </link>
+      <pose>0 0 0 0 0 0</pose>
+      <self_collide>false</self_collide>
     </model>
-
-    <model name="obs_5_5">
+    <model name='obs_5_5'>
       <static>true</static>
-      <link name="link">
+      <link name='link'>
         <pose>5 5 0.5 0 0 0</pose>
-        <collision name="collision">
-          <geometry><box><size>1 1 1</size></box></geometry>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
         </collision>
-        <visual name="visual">
-          <geometry><box><size>1 1 1</size></box></geometry>
-          <material><ambient>1 0 0 1</ambient></material>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 0 0 1</ambient>
+          </material>
         </visual>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
       </link>
+      <pose>0 0 0 0 0 0</pose>
+      <self_collide>false</self_collide>
     </model>
-
-    <!-- Staggered obstacles (smooth curve effect) -->
-
-    <model name="obs_3_1">
+    <model name='obs_3_1'>
       <static>true</static>
-      <link name="link">
+      <link name='link'>
         <pose>3 1 0.5 0 0 0</pose>
-        <collision name="collision">
-          <geometry><box><size>1 1 1</size></box></geometry>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
         </collision>
-        <visual name="visual">
-          <geometry><box><size>1 1 1</size></box></geometry>
-          <material><ambient>1 0 0 1</ambient></material>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 0 0 1</ambient>
+          </material>
         </visual>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
       </link>
+      <pose>0 0 0 0 0 0</pose>
+      <self_collide>false</self_collide>
     </model>
-
-    <model name="obs_4_2">
+    <model name='obs_4_2'>
       <static>true</static>
-      <link name="link">
+      <link name='link'>
         <pose>4 2 0.5 0 0 0</pose>
-        <collision name="collision">
-          <geometry><box><size>1 1 1</size></box></geometry>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
         </collision>
-        <visual name="visual">
-          <geometry><box><size>1 1 1</size></box></geometry>
-          <material><ambient>1 0 0 1</ambient></material>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 0 0 1</ambient>
+          </material>
         </visual>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
       </link>
+      <pose>0 0 0 0 0 0</pose>
+      <self_collide>false</self_collide>
     </model>
-
-    <model name="obs_3_3">
+    <model name='obs_3_3'>
       <static>true</static>
-      <link name="link">
+      <link name='link'>
         <pose>3 3 0.5 0 0 0</pose>
-        <collision name="collision">
-          <geometry><box><size>1 1 1</size></box></geometry>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
         </collision>
-        <visual name="visual">
-          <geometry><box><size>1 1 1</size></box></geometry>
-          <material><ambient>1 0 0 1</ambient></material>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>1 1 1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 0 0 1</ambient>
+          </material>
         </visual>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
       </link>
+      <pose>0 0 0 0 0 0</pose>
+      <self_collide>false</self_collide>
     </model>
-
-    <!-- ===== END OBSTACLES ===== -->
-
+    <light name='sun' type='directional'>
+      <pose>0 0 50 0 0 0</pose>
+      <cast_shadows>true</cast_shadows>
+      <intensity>1</intensity>
+      <direction>-0.40000000000000002 -0.20000000000000001 -1</direction>
+      <diffuse>1 1 1 1</diffuse>
+      <specular>1 1 1 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <linear>0.01</linear>
+        <constant>0.90000000000000002</constant>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <spot>
+        <inner_angle>0</inner_angle>
+        <outer_angle>0</outer_angle>
+        <falloff>0</falloff>
+      </spot>
+    </light>
   </world>
 </sdf>
