@@ -140,7 +140,7 @@ def generate_launch_description():
                 name='path_executor_' + uav,
                 parameters=[{
                     'uav_id': uav,
-                    'speed': 2.0,
+                    'speed': 0.5 if uav == 'x2' else 2.0,  # TEMP: slow x2 for ASSIST testing
                     'waypoint_threshold': 0.2,
                     'lookahead': 5,
                 }]
