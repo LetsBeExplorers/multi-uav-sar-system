@@ -110,10 +110,7 @@ class UAVStateManager(Node):
 
         elif s == 'SEARCHING':
             if event == 'REGION_COMPLETE':
-                if value < self.threshold:
-                    self._transition('REFINING')
-                else:
-                    self._transition('ASSISTING')
+                self._transition('REFINING')
             elif event == 'ALL_DRONES_DONE':
                 self._transition('RETURNING')
             elif event == 'DETECTION_EVENT':
