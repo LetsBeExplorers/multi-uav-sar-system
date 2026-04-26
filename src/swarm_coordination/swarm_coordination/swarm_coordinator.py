@@ -252,31 +252,25 @@ class SwarmCoordinator(Node):
             self.coverage_map[uid] = ratio
 
     def _check_coverage_events(self):
-        self._publish_status(f'[{self.uav_id}] CHECK CALLED MODE={self.current_mode}')
         if self.coverage_waypoints_total == 0:
             return
 
         coverage = len(self.visited_cells) / self.total_cells if self.total_cells else 0.0
 
-        # mid-route cutoff: skip remaining waypoints once the relevant threshold is met
-        if self.current_mode in ('SEARCHING', 'REFINING') and coverage >= self.threshold:
-            self.coverage_waypoints_visited = self.coverage_waypoints_total
-        elif self.current_mode == 'ASSISTING':
+        # Early stop for assisting
+        if self.current_mode == 'ASSISTING':
             peer = {uid: r for uid, r in self.coverage_map.items() if uid != self.uav_id}
             if peer and all(r >= self.threshold for r in peer.values()):
-                self.coverage_waypoints_visited = self.coverage_waypoints_total
+                self._publish_event('ASSIST_COMPLETE')
+                return
 
         if self.coverage_waypoints_visited < self.coverage_waypoints_total:
             return
-        other = {uid: r for uid, r in self.coverage_map.items() if uid != self.uav_id}
-        others_need_help = bool(other) and any(r < self.threshold for r in other.values())
 
         if self.current_mode == 'SEARCHING':
             self._publish_event('REGION_COMPLETE', value=coverage)
 
         elif self.current_mode == 'REFINING':
-
-            # measure improvement
             improvement = coverage - self.last_coverage
 
             if improvement < 0.01:  # less than 1% improvement
@@ -285,13 +279,9 @@ class SwarmCoordinator(Node):
                 self.stall_count = 0
 
             self.last_coverage = coverage
-            self._publish_status(f'[{self.uav_id}] RAW COVERAGE: {coverage:.4f}')
 
             # only refine again if needed
             if coverage + 1e-6 < self.threshold and self.stall_count < 2:
-                self.get_logger().info(
-                    f'[{self.uav_id}] Refining again (coverage={coverage:.2f})'
-                )
                 self.coverage_waypoints_visited = 0
                 self._publish_refinement_waypoints()
                 return
