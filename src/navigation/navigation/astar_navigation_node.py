@@ -46,6 +46,7 @@ class AStarNavigationNode(Node):
         self._consecutive_failures = 0
         self._path_failed_threshold = 20  # silent retries before PATH_FAILED (~10s at 2 Hz)
         self._max_replan_attempts = 40    # REPLAN_FAIL ~10s after PATH_FAILED at 2 Hz
+        self.in_region = False
 
         qos_transient = QoSProfile(
             depth=1,
@@ -97,6 +98,11 @@ class AStarNavigationNode(Node):
             msg.pose.pose.position.x,
             msg.pose.pose.position.y
         )
+
+        # detect if UAV has entered its assigned region
+        x = self.current_pose[0]
+        if self.x_min <= x <= self.x_max:
+            self.in_region = True
 
     # ===== Waypoint Reception =====
 
@@ -297,7 +303,13 @@ class AStarNavigationNode(Node):
                     if in_bounds(ax, ay) and grid_flat[ay * width + ax] > 0:
                         step_cost = 10  # neighbor touches an obstacle — keep clearance
                         break
-                tentative_g = g_score[current] + step_cost
+
+                # soft region penalty (only after entering region)
+                wx = nb[0] * self._cached_grid.info.resolution + self._cached_grid.info.origin.position.x
+
+                region_penalty = 15 if (self.in_region and not (self.x_min <= wx <= self.x_max)) else 0
+
+                tentative_g = g_score[current] + step_cost + region_penalty
                 if nb not in g_score or tentative_g < g_score[nb]:
                     came_from[nb] = current
                     g_score[nb] = tentative_g
