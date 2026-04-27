@@ -32,7 +32,7 @@ def generate_launch_description():
                 parameters=[{
                     'uav_id': uav,
                     'threshold': 0.90,
-                    'assist_threshold': 0.80,
+                    'assist_threshold': 0.90,
                     'num_uavs': len(uavs),
                 }]
             )
