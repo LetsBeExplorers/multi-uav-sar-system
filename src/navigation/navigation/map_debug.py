@@ -25,9 +25,11 @@ class MapViewer(Node):
         self.origin_x = -10.0
         self.origin_y = -10.0
         self.resolution = 1.0
-
-        cmap = plt.get_cmap('tab10')
-        self.colors = {uid: cmap(i) for i, uid in enumerate(self.uav_ids)}
+        self.colors = {
+            'x1': 'red',
+            'x2': 'green',
+            'x3': 'blue',
+        }
 
         # ===== Subscribers =====
         self.create_subscription(
@@ -91,7 +93,7 @@ class MapViewer(Node):
         self.ax.imshow(display, cmap='gray', origin='lower', vmin=0, vmax=1, extent=extent)
 
         for uid in self.uav_ids:
-            color = self.colors[uid]
+            color = self.colors.get(uid, 'black')
             path = self.paths[uid]
             if path:
                 xs, ys = zip(*path)
