@@ -109,6 +109,9 @@ class SwarmCoordinator(Node):
             Empty, f'/{self.uav_id}/nav/reached_coverage_waypoint', self._on_waypoint_reached, 10)
         self.create_subscription(
             MissionCoverage, '/mission/coverage', self._on_coverage_update, 10)
+        self.create_subscription(
+            FSMEvent, f'/{self.uav_id}/fsm/command', self._on_fsm_command, 10)
+        
         # subscribe to all peers' odom so cells they pass through our slice get marked
         for i in range(self.num_uavs):
             peer_id = f'x{i + 1}'
