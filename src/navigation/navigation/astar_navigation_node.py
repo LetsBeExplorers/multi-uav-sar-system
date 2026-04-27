@@ -309,8 +309,13 @@ class AStarNavigationNode(Node):
 
                 # soft region penalty (only after entering region)
                 wx = nb[0] * self._cached_grid.info.resolution + self._cached_grid.info.origin.position.x
+                margin = self._cached_grid.info.resolution  # 1 cell tolerance
 
-                region_penalty = 15 if (self.in_region and not (self.x_min <= wx <= self.x_max)) else 0
+                region_penalty = 0
+
+                if self.in_region:
+                    if wx < self.x_min - margin or wx > self.x_max + margin:
+                        region_penalty = 15
 
                 tentative_g = g_score[current] + step_cost + region_penalty
                 if nb not in g_score or tentative_g < g_score[nb]:
