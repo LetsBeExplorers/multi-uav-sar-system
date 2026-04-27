@@ -19,7 +19,7 @@ def generate_launch_description():
     world_name = LaunchConfiguration('world_name')
 
     # List of UAVs in the system
-    uavs = ['x1', 'x2']
+    uavs = ['x1', 'x2', 'x3']
 
     for uav in uavs:
 

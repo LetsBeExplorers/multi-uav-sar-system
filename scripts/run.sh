@@ -20,7 +20,7 @@ sleep 2
 echo "Starting Mission Manager..."
 
 # Run mission manager (foreground)
-ros2 run mission_manager mission_manager --ros-args -p num_uavs:=2
+ros2 run mission_manager mission_manager
 
 # When MissionManager exits → clean shutdown
 echo "Shutting down system..."
