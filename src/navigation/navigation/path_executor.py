@@ -83,12 +83,6 @@ class PathExecutorNode(Node):
             self._on_fsm_command,
             10
         )
-        self.create_subscription(
-            Empty,
-            '/mission/stop',
-            self._on_stop,
-            10
-        )
 
         # ===== Timer =====
         self.create_timer(0.1, self._move_step)
@@ -211,14 +205,6 @@ class PathExecutorNode(Node):
     def _on_fsm_command(self, msg):
         if msg.event == 'GO_HOME':
             self.go_home()
-
-    # ===== Stop Handler =====
-
-    def _on_stop(self, msg):
-        self.current_path = []
-        self.current_index = 0
-        self.is_returning = False
-        self._stop()
 
     # ===== Metrics =====
 
