@@ -50,6 +50,7 @@ def generate_launch_description():
                     'area_bounds': [-10, 10, -10, 10],
                     'rows': 7,
                     'threshold': 0.90,
+                    'assist_threshold': 0.80,
                 }]
             )
         )
