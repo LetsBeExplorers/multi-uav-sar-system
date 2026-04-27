@@ -23,11 +23,15 @@ class AStarNavigationNode(Node):
             parameters=[
                 ('uav_id', 'x1'),
                 ('replan_check_rate', 0.5),
+                ('x_min', -999.0),
+                ('x_max', 999.0),
             ]
         )
 
         self.uav_id = self.get_parameter('uav_id').value
         replan_rate = self.get_parameter('replan_check_rate').value
+        self.x_min = self.get_parameter('x_min').value
+        self.x_max = self.get_parameter('x_max').value
 
         # ===== State =====
         self.current_pose = None
@@ -97,6 +101,13 @@ class AStarNavigationNode(Node):
     # ===== Waypoint Reception =====
 
     def _on_waypoints_received(self, msg):
+
+        # get region bounds
+        bounds = msg.header.frame_id.split(',')
+        if len(bounds) == 2:
+            self.x_min = float(bounds[0])
+            self.x_max = float(bounds[1])
+
         if not msg.poses:
             return
 
@@ -134,9 +145,18 @@ class AStarNavigationNode(Node):
                 for dy in range(-radius, radius + 1):
                     nx, ny = gx + dx, gy + dy
 
-                    # stay inside grid bounds
+                    # stay inside section bounds
                     if 0 <= nx < width and 0 <= ny < height:
-                        # free or unknown cell (<= 0) is allowed
+
+                        # convert to world x
+                        origin_x = self._cached_grid.info.origin.position.x
+                        resolution = self._cached_grid.info.resolution
+                        wx = nx * resolution + origin_x
+
+                        # enforce region constraint
+                        if not (self.x_min <= wx <= self.x_max):
+                            continue
+
                         if grid_flat[ny * width + nx] <= 0:
                             return (nx, ny)
 

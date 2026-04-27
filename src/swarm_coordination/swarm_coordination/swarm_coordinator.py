@@ -233,7 +233,8 @@ class SwarmCoordinator(Node):
 
     def _send_waypoints(self, poses):
         msg = PoseArray()
-        msg.header.frame_id = 'world'
+        # encode region bounds in header
+        msg.header.frame_id = f"{self.x_start},{self.x_end}"
         msg.poses = poses
         self.coverage_waypoints_total = len(poses)
         self._waypoint_pub.publish(msg)
