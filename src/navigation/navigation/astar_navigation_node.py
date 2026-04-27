@@ -121,7 +121,6 @@ class AStarNavigationNode(Node):
     def _on_waypoint_reached(self, msg):
         self.waypoint_index += 1
         if self.waypoint_index >= len(self.waypoints):
-            self.get_logger().info(f'[{self.uav_id}] waypoint sequence complete')
             self.waypoints = []
             self.current_path = None
             return
