@@ -113,6 +113,7 @@ class AStarNavigationNode(Node):
         if len(bounds) == 2:
             self.x_min = float(bounds[0])
             self.x_max = float(bounds[1])
+            self.in_region = False
 
         if not msg.poses:
             return
@@ -122,7 +123,6 @@ class AStarNavigationNode(Node):
         self.current_path = None
         if self.current_pose is not None:
             self._plan()
-        # else: _check_path_validity timer retries once pose arrives
 
     def _on_waypoint_reached(self, msg):
         self.waypoint_index += 1
