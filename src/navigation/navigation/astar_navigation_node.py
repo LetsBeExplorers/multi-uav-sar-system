@@ -192,6 +192,11 @@ class AStarNavigationNode(Node):
         start = w2g(*self.current_pose)
         goal = w2g(*self.waypoints[self.waypoint_index])
 
+        # clamp goal to grid bounds — landing pads sit outside the search grid
+        height = len(grid_flat) // width
+        goal = (max(0, min(goal[0], width - 1)),
+                max(0, min(goal[1], height - 1)))
+
         # adjust goal if it's blocked (e.g., another UAV is sitting there)
         idx = goal[1] * width + goal[0]
 
