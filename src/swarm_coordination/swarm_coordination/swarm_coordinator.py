@@ -8,6 +8,7 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sar_msgs.msg import FSMEvent, MissionCoverage, UAVState
 from std_msgs.msg import Empty, String
+from swarm_coordination.uav_state_manager import assign_helpers
 
 
 def _lawnmower(x_start, x_end, ymin, ymax, rows, reverse=False):
@@ -45,6 +46,7 @@ class SwarmCoordinator(Node):
                 ('area_bounds', [-10, 10, -10, 10]),
                 ('rows', 3),
                 ('threshold', 0.90),
+                ('assist_threshold', 0.80),
                 ('completion_wait_sec', 1.5),  # brief sync hover before deciding
                 ('resolution', 1.0),
                 ('coverage_radius', 1.0),  # sensor footprint radius (m) for cell marking
@@ -56,6 +58,7 @@ class SwarmCoordinator(Node):
         self.area = self.get_parameter('area_bounds').value
         self.rows = self.get_parameter('rows').value
         self.threshold = self.get_parameter('threshold').value
+        self.assist_threshold = self.get_parameter('assist_threshold').value
         self.completion_wait_sec = self.get_parameter('completion_wait_sec').value
         self.resolution = self.get_parameter('resolution').value
         self.coverage_radius = self.get_parameter('coverage_radius').value
@@ -173,7 +176,12 @@ class SwarmCoordinator(Node):
 
         elif self.current_mode == 'ASSISTING':
             self._reset_coverage()
-            self._publish_assistive_waypoints()
+            # match the threshold the FSM just used to pick this UAV as a helper
+            pair_threshold = (
+                self.assist_threshold if msg.previous_state == 'REFINING'
+                else self.threshold
+            )
+            self._publish_assistive_waypoints(pair_threshold)
 
     # ===== Waypoint Generation =====
 
@@ -198,10 +206,13 @@ class SwarmCoordinator(Node):
         )
         self._send_waypoints(poses)
 
-    def _publish_assistive_waypoints(self):
-        other = {uid: r for uid, r in self.coverage_map.items() if uid != self.uav_id}
-
-        target_id = min(other, key=other.get)
+    def _publish_assistive_waypoints(self, pair_threshold):
+        pairings = assign_helpers(self.coverage_map, pair_threshold)
+        target_id = pairings.get(self.uav_id)
+        if target_id is None:
+            # FSM put us in ASSISTING but no target survived re-pairing — stand down
+            self._publish_event('ASSIST_COMPLETE')
+            return
         target_index = int(target_id[1:]) - 1   # 'x1' → 0, 'x2' → 1, …
 
         xmin, xmax = self.area[0], self.area[1]

@@ -72,6 +72,8 @@ def test_region_complete_above_threshold_goes_to_assisting():
 def test_refinement_complete_goes_to_assisting():
     uut = _make_fsm()
     uut.current_state = 'REFINING'
+    # x1 is the nearest helper for x2 (the only target), so x1 gets paired
+    uut.coverage_map = {'x1': 0.95, 'x2': 0.50, 'x3': 0.95}
     uut._handle_event('REFINEMENT_COMPLETE')
     assert uut.current_state == 'ASSISTING'
     uut.destroy_node()
@@ -105,6 +107,8 @@ def test_assist_complete_stays_assisting():
     """ASSIST_COMPLETE re-emits ASSISTING so the coordinator picks a new target."""
     uut = _make_fsm()
     uut.current_state = 'ASSISTING'
+    # x2 still below threshold; x1 is the nearest unpaired helper
+    uut.coverage_map = {'x1': 0.95, 'x2': 0.50, 'x3': 0.95}
     uut._handle_event('ASSIST_COMPLETE')
     assert uut.current_state == 'ASSISTING'
     uut.destroy_node()

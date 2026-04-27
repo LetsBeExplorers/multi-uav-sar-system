@@ -12,6 +12,46 @@ _SEARCH_STATES = {'SEARCHING', 'REFINING', 'ASSISTING'}
 _ALL_STATES = _SEARCH_STATES | {'IDLE', 'VERIFYING', 'TARGET_LOCK', 'RETURNING', 'RECOVERY', 'EMERGENCY_STOP'}
 
 
+def _uav_idx(uav_id):
+    return int(uav_id[1:])
+
+
+def assign_helpers(coverage_map, threshold):
+    """Pair each unfinished region with at most one helper UAV.
+
+    Greedy nearest-id pairing; ties broken by lower helper id (so adjacent
+    UAVs end up paired). Returns {helper_id: target_id}. UAVs not present
+    are either targets themselves or have no target to help (go home).
+    """
+    if not coverage_map:
+        return {}
+
+    targets = sorted(
+        (uid for uid, r in coverage_map.items() if r < threshold),
+        key=_uav_idx,
+    )
+    helpers = sorted(
+        (uid for uid, r in coverage_map.items() if r >= threshold),
+        key=_uav_idx,
+    )
+
+    pairings = {}
+    used = set()
+    for tgt in targets:
+        tgt_idx = _uav_idx(tgt)
+        best, best_dist = None, None
+        for h in helpers:
+            if h in used:
+                continue
+            d = abs(_uav_idx(h) - tgt_idx)
+            if best_dist is None or d < best_dist:
+                best, best_dist = h, d
+        if best is not None:
+            pairings[best] = tgt
+            used.add(best)
+    return pairings
+
+
 class UAVStateManager(Node):
 
     def __init__(self):
@@ -125,15 +165,11 @@ class UAVStateManager(Node):
                 if len(self.coverage_map) < self.num_uavs:
                     return  # not enough info yet
 
-                others = {
-                    uid: r for uid, r in self.coverage_map.items()
-                    if uid != self.uav_id
-                }
-
-                if all(r >= self.assist_threshold for r in others.values()):
-                    self._transition('RETURNING')
-                else:
+                pairings = assign_helpers(self.coverage_map, self.assist_threshold)
+                if self.uav_id in pairings:
                     self._transition('ASSISTING')
+                else:
+                    self._transition('RETURNING')
 
             elif event == 'ALL_DRONES_DONE':
                 self._transition('RETURNING')
@@ -153,16 +189,12 @@ class UAVStateManager(Node):
                 if len(self.coverage_map) < self.num_uavs:
                     return  # not enough info yet
 
-                others = {
-                    uid: r for uid, r in self.coverage_map.items()
-                    if uid != self.uav_id
-                }
-
-                if all(r >= self.threshold for r in others.values()):
-                    self._transition('RETURNING')
-                else:
+                pairings = assign_helpers(self.coverage_map, self.threshold)
+                if self.uav_id in pairings:
                     # Re-emit ASSISTING so the coordinator picks a new target region
                     self._transition('ASSISTING')
+                else:
+                    self._transition('RETURNING')
 
             elif event == 'DETECTION_EVENT':
                 self._transition('VERIFYING')
