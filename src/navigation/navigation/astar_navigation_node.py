@@ -193,7 +193,10 @@ class AStarNavigationNode(Node):
         goal = w2g(*self.waypoints[self.waypoint_index])
 
         # adjust goal if it's blocked (e.g., another UAV is sitting there)
-        goal = self._find_nearest_free(goal, grid_flat, width)
+        idx = goal[1] * width + goal[0]
+
+        if grid_flat[idx] > 0:   # only if actually blocked
+            goal = self._find_nearest_free(goal, grid_flat, width)
         path = self._astar(start, goal, grid_flat, width)
 
         if path is None:
