@@ -203,6 +203,14 @@ class AStarNavigationNode(Node):
             goal = self._find_nearest_free(goal, grid_flat, width)
         path = self._astar(start, goal, grid_flat, width)
 
+        if path is not None and self.mode == "GO_HOME":
+            gx, gy = self.waypoints[self.waypoint_index]
+            final = w2g(gx, gy)
+
+            # only append if it's actually different
+            if not path or path[-1] != final:
+                path.append(final)
+
         if path is None:
             self.path_failed_count += 1
             self._consecutive_failures += 1
