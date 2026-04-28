@@ -201,31 +201,31 @@ class WorldModelNode(Node):
             else:
                 max_range = r
 
-            # mark free space along the ray
-            last_gx, last_gy = None, None
-            d = 0.0
+            # start cell
+            sx_g, sy_g = self.world_to_grid_center(sx, sy)
 
-            while d < max_range:
-                wx = sx + d * dx
-                wy = sy + d * dy
-                gx, gy = self.world_to_grid_center(wx, wy)
+            # end point
+            epsilon = 0.001
+            ex = sx + (max_range - epsilon) * dx
+            ey = sy + (max_range - epsilon) * dy
 
-                # only update each cell once
-                if (gx, gy) != (last_gx, last_gy):
-                    if self._in_bounds(gx, gy) and self.static_grid[gy][gx] == 0:
-                        val = self.grid[gy][gx]
+            ex_g, ey_g = self.world_to_grid_center(ex, ey)
 
-                        # don't erase strong obstacles
-                        if val < 3:
-                            self.grid[gy][gx] = -2
+            # trace grid cells
+            cells = self._bresenham(sx_g, sy_g, ex_g, ey_g)
 
-                    last_gx, last_gy = gx, gy
+            # mark free space (all except last)
+            for gx, gy in cells[:-1]:
+                if self._is_freeable(gx, gy):
+                    self._apply_free(gx, gy)
 
-                d += self.resolution * 0.5
-
-            # mark obstacle
+            # mark obstacle (last cell only if hit)
             if r < msg.range_max:
-                self.mark_occupied(sx + r * dx, sy + r * dy)
+                gx, gy = self.world_to_grid_center(
+                    sx + r * dx,
+                    sy + r * dy
+                )
+                self._apply_occupied(gx, gy)
 
     # ===== Dynamic Obstacles =====
 
