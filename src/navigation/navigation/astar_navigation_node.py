@@ -64,30 +64,13 @@ class AStarNavigationNode(Node):
 
         # ===== Subscribers =====
         self.create_subscription(
-            PoseArray,
-            f'/{self.uav_id}/nav/waypoints',
-            self._on_waypoints_received,
-            qos_transient
-        )
+            PoseArray, f'/{self.uav_id}/nav/waypoints', self._on_waypoints_received, qos_transient)
         self.create_subscription(
-            Odometry,
-            f'/{self.uav_id}/state/odom',
-            self._on_pose_update,
-            10
-        )
-        # path executor signals when the current waypoint is reached
+            Odometry, f'/{self.uav_id}/state/odom', self._on_pose_update, 10)
         self.create_subscription(
-            Empty,
-            f'/{self.uav_id}/nav/reached_coverage_waypoint',
-            self._on_waypoint_reached,
-            10
-        )
+            Empty, f'/{self.uav_id}/nav/reached_coverage_waypoint', self._on_waypoint_reached, 10)
         self.create_subscription(
-            OccupancyGrid,
-            f'/{self.uav_id}/world_model/grid',
-            self._on_grid_update,
-            qos_transient
-        )
+            OccupancyGrid, f'/{self.uav_id}/world_model/grid', self._on_grid_update, qos_transient)
 
         # ===== Replan Timer =====
         self.create_timer(1.0 / replan_rate, self._check_path_validity)
