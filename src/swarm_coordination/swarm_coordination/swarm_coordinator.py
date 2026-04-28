@@ -156,8 +156,6 @@ class SwarmCoordinator(Node):
         if msg.uav_id != self.uav_id:
             return
 
-        self.get_logger().info(f'[{self.uav_id}] COMMAND → {msg.event}')
-
         # always unpause on explicit command
         self.is_paused = False
 
