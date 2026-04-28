@@ -107,6 +107,19 @@ class AStarNavigationNode(Node):
     # ===== Waypoint Reception =====
 
     def _on_waypoints_received(self, msg):
+        if not msg.poses:
+            # Clear ALL planning state
+            self.current_goal = None
+            self.waypoints = []
+            self.waypoint_index = 0
+            self.current_path = None
+
+            empty_path = Path()
+            empty_path.header.stamp = self.get_clock().now().to_msg()
+            empty_path.header.frame_id = 'map'
+            self._path_pub.publish(empty_path)
+
+            return
 
         # get region bounds
         bounds = msg.header.frame_id.split(',')
@@ -114,9 +127,6 @@ class AStarNavigationNode(Node):
             self.x_min = float(bounds[0])
             self.x_max = float(bounds[1])
             self.in_region = False
-
-        if not msg.poses:
-            return
 
         self.waypoints = [(p.position.x, p.position.y) for p in msg.poses]
         self.waypoint_index = 0
