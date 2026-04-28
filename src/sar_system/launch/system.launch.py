@@ -87,7 +87,6 @@ def generate_launch_description():
                     'resolution': 1.0,
                     'origin_x': -10.0,
                     'origin_y': -10.0,
-                    'inflation_radius': 1,
                     'collision_threshold': 0.5,
                 }]
             )

@@ -278,33 +278,6 @@ class WorldModelNode(Node):
                 else:
                     flat.append(-1)    # unknown
 
-        # inflate static/lidar obstacles so A* keeps clearance — peers already use a 5-cell footprint
-        r = self.inflation_radius
-        if r > 0:
-            peer_cells = set()
-            for px, py in self.dynamic_obstacles.values():
-                pgx, pgy = self.world_to_grid(px, py)
-                for dx, dy in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)):
-                    peer_cells.add((pgx + dx, pgy + dy))
-
-            inflated = list(flat)
-            r_sq = r * r
-            for gy in range(self.grid_height):
-                for gx in range(self.grid_width):
-                    if flat[gy * self.grid_width + gx] != 100:
-                        continue
-                    if (gx, gy) in peer_cells:
-                        continue
-                    for dy in range(-r, r + 1):
-                        for dx in range(-r, r + 1):
-                            if dx * dx + dy * dy > r_sq:
-                                continue
-                            nx, ny = gx + dx, gy + dy
-                            if 0 <= nx < self.grid_width and 0 <= ny < self.grid_height:
-                                if inflated[ny * self.grid_width + nx] != 100:
-                                    inflated[ny * self.grid_width + nx] = 100
-            flat = inflated
-
         msg.data = flat
         self._grid_pub.publish(msg)
 
