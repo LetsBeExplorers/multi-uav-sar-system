@@ -4,7 +4,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 import rclpy
-from nav_msgs.msg import OccupancyGrid, Odometry
+from nav_msgs.msg import OccupancyGrid, Odometry, Path
 from rclpy.node import Node
 
 
@@ -25,6 +25,8 @@ class MapViewer(Node):
         self.origin_x = -10.0
         self.origin_y = -10.0
         self.resolution = 1.0
+        self.current_path = None
+        self.goal = None
         self.colors = {
             'x1': 'red',
             'x2': 'green',
@@ -46,10 +48,31 @@ class MapViewer(Node):
                 10
             )
 
+        self.create_subscription(
+            Path,
+            f'/{grid_source}/nav/planned_path',
+            self.path_callback,
+            10
+        )
+
         plt.ion()
         self.fig, self.ax = plt.subplots(figsize=(8, 8))
 
     # ===== Callbacks =====
+
+    def path_callback(self, msg):
+        if msg.poses:
+            self.current_path = [
+                (p.pose.position.x, p.pose.position.y)
+                for p in msg.poses
+            ]
+
+            # also set goal = last point
+            last = msg.poses[-1].pose.position
+            self.goal = (last.x, last.y)
+        else:
+            self.current_path = None
+            self.goal = None
 
     def odom_callback(self, uid, msg):
         x = msg.pose.pose.position.x
@@ -102,6 +125,20 @@ class MapViewer(Node):
             if pos is not None:
                 self.ax.plot(pos[0], pos[1], 'o', color=color, markersize=8,
                              markeredgecolor='black', markeredgewidth=0.5)
+
+        if self.current_path:
+            xs, ys = zip(*self.current_path)
+            self.ax.plot(xs, ys, '--', color='yellow', linewidth=2, label='planned')
+
+        if self.goal is not None:
+            self.ax.plot(
+                self.goal[0],
+                self.goal[1],
+                'X',
+                color='yellow',
+                markersize=12,
+                markeredgecolor='black'
+            )
 
         self.ax.set_title('Occupancy Grid + UAV Paths')
         self.ax.set_xlabel('X')
