@@ -12,7 +12,7 @@ from swarm_coordination.uav_state_manager import assign_helpers
 
 
 def _lawnmower(x_start, x_end, ymin, ymax, rows, reverse=False):
-    """Boustrophedon sweep. reverse=True starts at the top-right corner instead of bottom-left."""
+    # Boustrophedon sweep. reverse=True starts at the top-right corner instead of bottom-left.
     poses = []
     row_spacing = (ymax - ymin) / max(rows - 1, 1)
     for i in range(rows):
@@ -187,7 +187,7 @@ class SwarmCoordinator(Node):
                 self._publish_assistive_waypoints(self.threshold)
 
         elif msg.event == 'STOP':
-            self._send_waypoints([])
+            self._send_waypoints([], mode="STOP")
 
     def _on_fsm_state_change(self, msg):
         if msg.uav_id != self.uav_id:
@@ -219,7 +219,7 @@ class SwarmCoordinator(Node):
             self.area[2], self.area[3],
             self.rows
         )
-        self._send_waypoints(poses)
+        self._send_waypoints(poses, mode="SEARCH")
         self._publish_status(
             f'[{self.uav_id}] AREA x:[{self.x_start:.1f},{self.x_end:.1f}] rows:{self.rows}'
         )
@@ -232,7 +232,7 @@ class SwarmCoordinator(Node):
             self.rows * 2,
             reverse=True
         )
-        self._send_waypoints(poses)
+        self._send_waypoints(poses, mode="REFINE")
 
     def _publish_assistive_waypoints(self, pair_threshold):
         pairings = assign_helpers(self.coverage_map, pair_threshold)
@@ -256,7 +256,7 @@ class SwarmCoordinator(Node):
             self.area[3] - spacing / 2,
             self.rows * 2 - 1,
         )
-        self._send_waypoints(poses)
+        self._send_waypoints(poses, mode="ASSIST")
         self._publish_status(f'[{self.uav_id}] ASSISTING → {target_id}')
 
     def _publish_return_home_waypoints(self):
@@ -269,14 +269,16 @@ class SwarmCoordinator(Node):
         pose.position.z = 1.0
         pose.orientation.w = 1.0
         self._send_waypoints([])  # clear current path
-        self._send_waypoints([pose])
+        self._send_waypoints([pose], mode="GO_HOME")
 
         self._publish_status(f'[{self.uav_id}] RETURNING HOME')
 
-    def _send_waypoints(self, poses):
+    def _send_waypoints(self, poses, mode="NORMAL"):
         msg = PoseArray()
-        # encode region bounds in header
-        msg.header.frame_id = f"{self.x_start},{self.x_end}"
+
+        # mode + bounds
+        msg.header.frame_id = f"{mode}|{self.x_start},{self.x_end}"
+
         msg.poses = poses
         self.coverage_waypoints_total = len(poses)
         self._waypoint_pub.publish(msg)

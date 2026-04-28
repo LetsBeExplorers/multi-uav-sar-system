@@ -59,23 +59,12 @@ class PathExecutorNode(Node):
             Empty, f'/{self.uav_id}/nav/reached_coverage_waypoint', 10)
         self._event_pub = self.create_publisher(
             FSMEvent, f'/{self.uav_id}/fsm/event', 10)
-        # go_home() publishes a single-pose PoseArray back into A* for return planning
-        self._waypoint_pub = self.create_publisher(
-            PoseArray, f'/{self.uav_id}/nav/waypoints', qos_transient)
 
         # ===== Subscribers =====
         self.create_subscription(
-            Path,
-            f'/{self.uav_id}/nav/planned_path',
-            self._on_path_received,
-            qos_transient
-        )
+            Path, f'/{self.uav_id}/nav/planned_path', self._on_path_received, qos_transient)
         self.create_subscription(
-            Odometry,
-            f'/{self.uav_id}/state/odom',
-            self._on_pose_update,
-            10
-        )
+            Odometry, f'/{self.uav_id}/state/odom', self._on_pose_update, 10)
 
         # ===== Timer =====
         self.create_timer(0.1, self._move_step)

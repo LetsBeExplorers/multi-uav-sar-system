@@ -47,6 +47,7 @@ class AStarNavigationNode(Node):
         self._path_failed_threshold = 20  # silent retries before PATH_FAILED (~10s at 2 Hz)
         self._max_replan_attempts = 40    # REPLAN_FAIL ~10s after PATH_FAILED at 2 Hz
         self.in_region = False
+        self.mode = "NORMAL"
 
         qos_transient = QoSProfile(
             depth=1,
@@ -122,12 +123,14 @@ class AStarNavigationNode(Node):
             return
 
         # get region bounds
-        bounds = msg.header.frame_id.split(',')
-        if len(bounds) == 2:
-            self.x_min = float(bounds[0])
-            self.x_max = float(bounds[1])
-            self.in_region = False
+        mode, bounds = msg.header.frame_id.split('|')
+        xmin, xmax = bounds.split(',')
 
+        self.x_min = float(xmin)
+        self.x_max = float(xmax)
+        self.in_region = False
+
+        self.mode = mode
         self.waypoints = [(p.position.x, p.position.y) for p in msg.poses]
         self.waypoint_index = 0
         self.current_path = None
