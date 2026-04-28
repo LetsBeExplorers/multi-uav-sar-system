@@ -14,7 +14,7 @@ class MapViewer(Node):
 
         # ===== Parameters =====
         self.declare_parameter('uav_ids', ['x1', 'x2', 'x3'])
-        self.declare_parameter('grid_source', 'x3')  # which UAV's world_model to display
+        self.declare_parameter('grid_source', 'x2')  # which UAV's world_model to display
         self.uav_ids = self.get_parameter('uav_ids').value
         grid_source = self.get_parameter('grid_source').value
 
