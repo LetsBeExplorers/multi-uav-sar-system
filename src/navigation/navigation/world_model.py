@@ -132,7 +132,54 @@ class WorldModelNode(Node):
         if self._in_bounds(gx, gy) and self.static_grid[gy][gx] == 0:
             self.grid[gy][gx] = 0
 
+    # ===== Cell Marking =====
+
+    def _is_freeable(self, gx, gy):
+        return (
+            self._in_bounds(gx, gy) and
+            self.static_grid[gy][gx] == 0 and
+            self.grid[gy][gx] != 4
+        )
+
+    def _apply_free(self, gx, gy):
+        if self.grid[gy][gx] > -2:
+            self.grid[gy][gx] -= 1
+
+    def _apply_occupied(self, gx, gy):
+        if self._in_bounds(gx, gy):
+            self.grid[gy][gx] = min(self.grid[gy][gx] + 2, 4)
+
     # ===== Sensor-Based Updates =====
+
+    def _bresenham(self, x0, y0, x1, y1):
+        cells = []
+        dx = abs(x1 - x0)
+        dy = abs(y1 - y0)
+        x, y = x0, y0
+        sx = 1 if x1 > x0 else -1
+        sy = 1 if y1 > y0 else -1
+
+        if dx > dy:
+            err = dx / 2.0
+            while x != x1:
+                cells.append((x, y))
+                err -= dy
+                if err < 0:
+                    y += sy
+                    err += dx
+                x += sx
+        else:
+            err = dy / 2.0
+            while y != y1:
+                cells.append((x, y))
+                err -= dx
+                if err < 0:
+                    x += sx
+                    err += dy
+                y += sy
+
+        cells.append((x1, y1))
+        return cells
 
     def _on_laser_scan(self, msg):
         if self.own_pose is None:
