@@ -53,12 +53,12 @@ class WorldModelNode(Node):
         # ===== Static Obstacles =====
         # param is a flat list [x1, y1, x2, y2, ...]
         obs_flat = self.get_parameter('static_obstacles').value
-        for i in range(0, len(obs_flat) - 1, 2):
+        for i in range(0, len(obs_flat), 2):
             wx, wy = float(obs_flat[i]), float(obs_flat[i + 1])
-            gx, gy = self.world_to_grid_center(wx, wy)
+            gx, gy = self.world_to_grid(wx, wy)
             if self._in_bounds(gx, gy):
                 self.static_grid[gy][gx] = 1
-                self.grid[gy][gx] = 4
+                self.grid[gy][gx] = 4  # seed as occupied for the publisher; static_grid is what protects it
         
         qos_transient = QoSProfile(
             depth=1,
@@ -106,7 +106,7 @@ class WorldModelNode(Node):
 
     # ===== Grid Management =====
 
-    def world_to_grid_center(self, wx, wy):
+    def world_to_grid(self, wx, wy):
         gx = int((wx + 0.5 - self.origin_x) / self.resolution)
         gy = int((wy + 0.5 - self.origin_y) / self.resolution)
         return gx, gy
@@ -128,18 +128,14 @@ class WorldModelNode(Node):
                     self.grid[gy][gx] = 4
 
     def mark_free(self, wx, wy):
-        gx, gy = self.world_to_grid_center(wx, wy)
+        gx, gy = self.world_to_grid(wx, wy)
         if self._in_bounds(gx, gy) and self.static_grid[gy][gx] == 0:
             self.grid[gy][gx] = 0
 
     # ===== Cell Marking =====
 
     def _is_freeable(self, gx, gy):
-        return (
-            self._in_bounds(gx, gy) and
-            self.static_grid[gy][gx] == 0 and
-            self.grid[gy][gx] != 4
-        )
+        return self._in_bounds(gx, gy) and self.static_grid[gy][gx] == 0
 
     def _apply_free(self, gx, gy):
         if self.grid[gy][gx] > -2:
@@ -186,46 +182,35 @@ class WorldModelNode(Node):
             return
 
         sx, sy, yaw = self.own_pose
+        sx_g, sy_g = self.world_to_grid(sx, sy)
 
         for i, r in enumerate(msg.ranges):
-            if r < msg.range_min:
+            if not math.isfinite(r) or r < msg.range_min:
                 continue
 
             angle = yaw + msg.angle_min + i * msg.angle_increment
             dx = math.cos(angle)
             dy = math.sin(angle)
 
-            # determine how far to trace
-            if r >= msg.range_max:
-                max_range = msg.range_max
-            else:
-                max_range = r
+            hit = r < msg.range_max
+            trace_r = r if hit else msg.range_max
 
-            # start cell
-            sx_g, sy_g = self.world_to_grid_center(sx, sy)
+            ex = sx + trace_r * dx
+            ey = sy + trace_r * dy
+            ex_g, ey_g = self.world_to_grid(ex, ey)
 
-            # end point
-            epsilon = 0.001
-            ex = sx + (max_range - epsilon) * dx
-            ey = sy + (max_range - epsilon) * dy
-
-            ex_g, ey_g = self.world_to_grid_center(ex, ey)
-
-            # trace grid cells
             cells = self._bresenham(sx_g, sy_g, ex_g, ey_g)
 
-            # mark free space (all except last)
+            # everything up to (but not including) the endpoint is free
             for gx, gy in cells[:-1]:
                 if self._is_freeable(gx, gy):
                     self._apply_free(gx, gy)
 
-            # mark obstacle (last cell only if hit)
-            if r < msg.range_max:
-                gx, gy = self.world_to_grid_center(
-                    sx + r * dx,
-                    sy + r * dy
-                )
-                self._apply_occupied(gx, gy)
+            # only the endpoint is occupied, and only if we actually hit something
+            if hit:
+                gx, gy = cells[-1]
+                if self._in_bounds(gx, gy) and self.static_grid[gy][gx] == 0:
+                    self._apply_occupied(gx, gy)
 
     # ===== Dynamic Obstacles =====
 
