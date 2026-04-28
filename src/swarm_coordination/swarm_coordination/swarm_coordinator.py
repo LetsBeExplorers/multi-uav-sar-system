@@ -176,7 +176,7 @@ class SwarmCoordinator(Node):
 
         elif msg.event == 'GO_HOME':
             self._reset_coverage()
-            self._send_home_waypoint()
+            self._publish_return_home_waypoints()
 
         elif msg.event == 'REPLAN':
             if self.current_mode == 'SEARCHING':
