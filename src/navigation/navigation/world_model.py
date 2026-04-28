@@ -53,7 +53,7 @@ class WorldModelNode(Node):
         obs_flat = self.get_parameter('static_obstacles').value
         for i in range(0, len(obs_flat) - 1, 2):
             wx, wy = float(obs_flat[i]), float(obs_flat[i + 1])
-            gx, gy = self.world_to_grid_center(wx, wy)
+            gx, gy = self.world_to_grid(wx, wy)
             if self._in_bounds(gx, gy):
                 self.static_grid[gy][gx] = 1
                 self.grid[gy][gx] = 4
@@ -104,7 +104,7 @@ class WorldModelNode(Node):
 
     # ===== Grid Management =====
 
-    def world_to_grid_center(self, wx, wy):
+    def world_to_grid(self, wx, wy):
         gx = int((wx + 0.5 - self.origin_x) / self.resolution)
         gy = int((wy + 0.5 - self.origin_y) / self.resolution)
         return gx, gy
@@ -126,7 +126,7 @@ class WorldModelNode(Node):
                     self.grid[gy][gx] = 4
 
     def mark_free(self, wx, wy):
-        gx, gy = self.world_to_grid_center(wx, wy)
+        gx, gy = self.world_to_grid(wx, wy)
         if self._in_bounds(gx, gy) and self.static_grid[gy][gx] == 0:
             self.grid[gy][gx] = 0
 
@@ -200,14 +200,14 @@ class WorldModelNode(Node):
                 max_range = r
 
             # start cell
-            sx_g, sy_g = self.world_to_grid_center(sx, sy)
+            sx_g, sy_g = self.world_to_grid(sx, sy)
 
             # end point
             epsilon = 0.001
             ex = sx + (max_range - epsilon) * dx
             ey = sy + (max_range - epsilon) * dy
 
-            ex_g, ey_g = self.world_to_grid_center(ex, ey)
+            ex_g, ey_g = self.world_to_grid(ex, ey)
 
             # trace grid cells
             cells = self._bresenham(sx_g, sy_g, ex_g, ey_g)
@@ -219,7 +219,7 @@ class WorldModelNode(Node):
 
             # mark obstacle (last cell only if hit)
             if r < msg.range_max:
-                gx, gy = self.world_to_grid_center(
+                gx, gy = self.world_to_grid(
                     sx + r * dx,
                     sy + r * dy
                 )
