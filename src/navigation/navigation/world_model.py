@@ -26,7 +26,6 @@ class WorldModelNode(Node):
                 ('resolution', 1.0),
                 ('origin_x', -10.0),
                 ('origin_y', -10.0),
-                ('inflation_radius', 1),
                 ('static_obstacles', []),
                 ('collision_threshold', 0.5),
             ]
@@ -39,7 +38,6 @@ class WorldModelNode(Node):
         self.resolution = self.get_parameter('resolution').value
         self.origin_x = self.get_parameter('origin_x').value
         self.origin_y = self.get_parameter('origin_y').value
-        self.inflation_radius = self.get_parameter('inflation_radius').value
         self.collision_threshold = self.get_parameter('collision_threshold').value
 
         # ===== State =====
