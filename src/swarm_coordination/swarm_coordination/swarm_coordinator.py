@@ -186,6 +186,9 @@ class SwarmCoordinator(Node):
             elif self.current_mode == 'ASSISTING':
                 self._publish_assistive_waypoints(self.threshold)
 
+        elif msg.event == 'STOP':
+            self._send_waypoints([])
+
     def _on_fsm_state_change(self, msg):
         if msg.uav_id != self.uav_id:
             return

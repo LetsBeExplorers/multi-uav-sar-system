@@ -79,8 +79,9 @@ class UAVStateManager(Node):
         self._command_pub = self.create_publisher(FSMEvent, f'/{self.uav_id}/fsm/command', 10)
 
         # ===== Subscribers =====
-        self.create_subscription(Empty, '/mission/start', self._on_mission_start, 10)
-        self.create_subscription(Empty, '/mission/stop', self._on_mission_stop, 10)
+        self.create_subscription(Empty, '/mission/start', self._on_mission_start, 10) # starts mission
+        self.create_subscription(Empty, '/mission/stop', self._on_mission_stop, 10) # ends mission
+        self.create_subscription(Empty, '/mission/halt', self._on_mission_halt, 10) # emergency stop
         self.create_subscription(FSMEvent, f'/{self.uav_id}/fsm/event', self._on_fsm_event, 10)
         self.create_subscription(MissionCoverage, '/mission/coverage', self._on_coverage_update, 10)
 
@@ -94,6 +95,9 @@ class UAVStateManager(Node):
 
     def _on_mission_stop(self, _msg):
         self._handle_event('MISSION_STOP')
+
+    def _on_mission_halt(self, _msg):
+        self._publish_command('STOP')
 
     def _on_fsm_event(self, msg):
         self._handle_event(msg.event, value=msg.value)

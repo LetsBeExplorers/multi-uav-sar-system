@@ -35,6 +35,7 @@ class MissionManager(Node):
         # ===== Publishers =====
         self._start_pub = self.create_publisher(Empty, '/mission/start', 10)
         self._stop_pub = self.create_publisher(Empty, '/mission/stop', 10)
+        self._halt_pub = self.create_publisher(Empty, '/mission/halt', 10)
         self._coverage_pub = self.create_publisher(MissionCoverage, '/mission/coverage', 10)
 
         # ===== Subscribers =====
@@ -104,7 +105,7 @@ class MissionManager(Node):
                     f'| area: {covered:6.1f} / {assigned:6.1f} m²'
                 )
 
-        print('\nCommands: start | stop | exit')
+        print('\nCommands: start | end | stop | exit')
 
     # ===== Operator Interface =====
 
@@ -128,6 +129,16 @@ class MissionManager(Node):
         self.mission_state = 'STOPPED'
         self._stop_pub.publish(Empty())
         self.get_logger().debug('STOP sent')
+
+    def send_halt(self):
+        if self.mission_state == 'IDLE':
+            print('Mission not running')
+            return
+
+        self._wait_for_subscribers(self._halt_pub)
+        self.mission_state = 'HALTED'
+        self._halt_pub.publish(Empty())
+        self.get_logger().debug('HALT sent')
 
     def _wait_for_subscribers(self, pub, timeout=5.0):
         """Block until all UAVs are subscribed to `pub` or timeout expires."""
@@ -159,8 +170,10 @@ def main(args=None):
             cmd = input('>> ').strip().lower()
             if cmd == 'start':
                 node.send_start()
-            elif cmd == 'stop':
+            elif cmd == 'end':
                 node.send_stop()
+            elif cmd == 'stop':
+                node.send_halt()
             elif cmd == 'exit':
                 break
             else:
