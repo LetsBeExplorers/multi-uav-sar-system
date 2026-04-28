@@ -100,12 +100,13 @@ class PathExecutorNode(Node):
 
     # ===== Path Reception =====
 
-        def _on_path_received(self, msg):
-            if not msg.poses:
-                # STOP condition → clear path so executor halts
-                self.current_path = []
-                self.current_index = 0
-                return
+    def _on_path_received(self, msg):
+        if not msg.poses:
+            # STOP condition → clear path so executor halts
+            self.current_path = []
+            self.current_index = 0
+            self.is_returning = False
+            return
                 
         self.current_path = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
         # extend the path so we end at actual home, not the grid boundary
