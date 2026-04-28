@@ -178,13 +178,16 @@ class AStarNavigationNode(Node):
         # fallback: return original goal if nothing found
         return goal
 
-    def _plan(self):
-        if not self.waypoints or self.current_pose is None:
-            return
-        if self.waypoint_index >= len(self.waypoints):
-            return
+    def _can_plan(self):
+        return (
+            self.waypoints and
+            self.current_pose is not None and
+            self.waypoint_index < len(self.waypoints) and
+            self._cached_grid is not None
+        )
 
-        if self._cached_grid is None:
+    def _plan(self):
+        if not self._can_plan():
             return
 
         width = self._cached_grid.info.width
