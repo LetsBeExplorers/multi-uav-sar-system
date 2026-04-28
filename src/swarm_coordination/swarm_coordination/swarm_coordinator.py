@@ -46,7 +46,6 @@ class SwarmCoordinator(Node):
                 ('area_bounds', [-10, 10, -10, 10]),
                 ('rows', 3),
                 ('threshold', 0.90),
-                ('assist_threshold', 0.80),
                 ('completion_wait_sec', 1.5),  # brief sync hover before deciding
                 ('resolution', 1.0),
                 ('coverage_radius', 1.0),  # sensor footprint radius (m) for cell marking
@@ -58,7 +57,6 @@ class SwarmCoordinator(Node):
         self.area = self.get_parameter('area_bounds').value
         self.rows = self.get_parameter('rows').value
         self.threshold = self.get_parameter('threshold').value
-        self.assist_threshold = self.get_parameter('assist_threshold').value
         self.completion_wait_sec = self.get_parameter('completion_wait_sec').value
         self.resolution = self.get_parameter('resolution').value
         self.coverage_radius = self.get_parameter('coverage_radius').value

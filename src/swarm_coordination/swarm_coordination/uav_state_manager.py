@@ -17,12 +17,7 @@ def _uav_idx(uav_id):
 
 
 def assign_helpers(coverage_map, threshold):
-    """Pair each unfinished region with at most one helper UAV.
-
-    Greedy nearest-id pairing; ties broken by lower helper id (so adjacent
-    UAVs end up paired). Returns {helper_id: target_id}. UAVs not present
-    are either targets themselves or have no target to help (go home).
-    """
+    # Pair each unfinished region with at most one helper UAV.
     if not coverage_map:
         return {}
 
@@ -63,14 +58,12 @@ class UAVStateManager(Node):
             parameters=[
                 ('uav_id', 'x1'),
                 ('threshold', 0.95),
-                ('assist_threshold', 0.80),
                 ('num_uavs', 3),
             ]
         )
 
         self.uav_id = self.get_parameter('uav_id').value
         self.threshold = self.get_parameter('threshold').value
-        self.assist_threshold = self.get_parameter('assist_threshold').value
         self.num_uavs = self.get_parameter('num_uavs').value
 
         # ===== State =====
@@ -164,7 +157,7 @@ class UAVStateManager(Node):
                 if len(self.coverage_map) < self.num_uavs:
                     return  # not enough info yet
 
-                pairings = assign_helpers(self.coverage_map, self.assist_threshold)
+                pairings = assign_helpers(self.coverage_map, self.threshold)
                 if self.uav_id in pairings:
                     self._transition('ASSISTING')
                 else:
