@@ -143,6 +143,7 @@ class UAVStateManager(Node):
         elif s == 'SEARCHING':
             if event == 'REGION_COMPLETE':
                 self._transition('REFINING')
+                self._publish_command('START_REFINEMENT')
             elif event == 'ALL_DRONES_DONE':
                 self._transition('RETURNING')
             elif event == 'DETECTION_EVENT':
@@ -160,6 +161,7 @@ class UAVStateManager(Node):
                 pairings = assign_helpers(self.coverage_map, self.threshold)
                 if self.uav_id in pairings:
                     self._transition('ASSISTING')
+                    self._publish_command('START_ASSIST')
                 else:
                     self._transition('RETURNING')
 
@@ -183,8 +185,8 @@ class UAVStateManager(Node):
 
                 pairings = assign_helpers(self.coverage_map, self.threshold)
                 if self.uav_id in pairings:
-                    # Re-emit ASSISTING so the coordinator picks a new target region
                     self._transition('ASSISTING')
+                    self._publish_command('START_ASSIST')
                 else:
                     self._transition('RETURNING')
 
