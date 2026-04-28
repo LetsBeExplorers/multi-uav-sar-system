@@ -62,7 +62,6 @@ class PathExecutorNode(Node):
         # go_home() publishes a single-pose PoseArray back into A* for return planning
         self._waypoint_pub = self.create_publisher(
             PoseArray, f'/{self.uav_id}/nav/waypoints', qos_transient)
-        self._status_pub = self.create_publisher(String, '/mission/status', 10)
 
         # ===== Subscribers =====
         self.create_subscription(
@@ -75,12 +74,6 @@ class PathExecutorNode(Node):
             Odometry,
             f'/{self.uav_id}/state/odom',
             self._on_pose_update,
-            10
-        )
-        self.create_subscription(
-            FSMEvent,
-            f'/{self.uav_id}/fsm/command',
-            self._on_fsm_command,
             10
         )
 
@@ -102,12 +95,11 @@ class PathExecutorNode(Node):
 
     def _on_path_received(self, msg):
         if not msg.poses:
-            # STOP condition → clear path so executor halts
             self.current_path = []
             self.current_index = 0
             self.is_returning = False
             return
-                
+
         self.current_path = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
         # extend the path so we end at actual home, not the grid boundary
         if self.is_returning and self.home_x is not None:
@@ -185,31 +177,6 @@ class PathExecutorNode(Node):
 
     def _stop(self):
         self._cmd_pub.publish(Twist())
-
-    # ===== Home Return =====
-
-    def go_home(self):
-        """Send home position as a single-waypoint PoseArray so A* plans the return path."""
-        if self.home_x is None:
-            return
-        self.is_returning = True
-        self.current_path = []
-        self.current_index = 0
-
-        msg = PoseArray()
-        pose = Pose()
-        pose.position.x = float(self.home_x)
-        pose.position.y = float(self.home_y)
-        pose.orientation.w = 1.0
-        msg.poses.append(pose)
-        self._waypoint_pub.publish(msg)
-
-        self.get_logger().info(
-            f'[{self.uav_id}] returning home ({self.home_x:.1f}, {self.home_y:.1f})')
-
-    def _on_fsm_command(self, msg):
-        if msg.event == 'GO_HOME':
-            self.go_home()
 
     # ===== Metrics =====
 
