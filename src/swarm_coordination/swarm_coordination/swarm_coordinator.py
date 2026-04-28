@@ -258,10 +258,14 @@ class SwarmCoordinator(Node):
 
     def _publish_return_home_waypoints(self):
         pose = Pose()
-        pose.position.x = 0.0
-        pose.position.y = 0.0
+        if self.home_pose is None:
+            return  # or fallback
+
+        pose.position.x = self.home_pose[0]
+        pose.position.y = self.home_pose[1]
         pose.position.z = 1.0
         pose.orientation.w = 1.0
+        self._send_waypoints([])  # clear current path
         self._send_waypoints([pose])
 
         self._publish_status(f'[{self.uav_id}] RETURNING HOME')
