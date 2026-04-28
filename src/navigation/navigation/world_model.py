@@ -245,13 +245,13 @@ class WorldModelNode(Node):
         # clear the full footprint at the old position to avoid ghost cells
         if uav_id in self.dynamic_obstacles:
             old_x, old_y = self.dynamic_obstacles[uav_id]
-            ogx, ogy = self.world_to_grid_center(old_x, old_y)
+            ogx, ogy = self.world_to_grid(old_x, old_y)
             for dx, dy in footprint:
                 nx, ny = ogx + dx, ogy + dy
                 if self._in_bounds(nx, ny) and self.static_grid[ny][nx] == 0:
                     self.grid[ny][nx] = 0
 
-        gx, gy = self.world_to_grid_center(x, y)
+        gx, gy = self.world_to_grid(x, y)
 
         for dx, dy in footprint:
             nx, ny = gx + dx, gy + dy
@@ -298,7 +298,7 @@ class WorldModelNode(Node):
         if r > 0:
             peer_cells = set()
             for px, py in self.dynamic_obstacles.values():
-                pgx, pgy = self.world_to_grid_center(px, py)
+                pgx, pgy = self.world_to_grid(px, py)
                 for dx, dy in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)):
                     peer_cells.add((pgx + dx, pgy + dy))
 
