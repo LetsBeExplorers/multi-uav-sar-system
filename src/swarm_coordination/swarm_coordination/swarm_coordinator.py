@@ -256,7 +256,7 @@ class SwarmCoordinator(Node):
             self.area[3] - spacing / 2,
             self.rows * 2 - 1,
         )
-        self._send_waypoints(poses, mode="ASSIST")
+        self._send_waypoints(poses, mode="ASSIST", x_start=tx_start, x_end=tx_end)
         self._publish_status(f'[{self.uav_id}] ASSISTING → {target_id}')
 
     def _publish_return_home_waypoints(self):
@@ -273,11 +273,13 @@ class SwarmCoordinator(Node):
 
         self._publish_status(f'[{self.uav_id}] RETURNING HOME')
 
-    def _send_waypoints(self, poses, mode="NORMAL"):
+    def _send_waypoints(self, poses, mode="NORMAL", x_start=None, x_end=None):
         msg = PoseArray()
 
-        # mode + bounds
-        msg.header.frame_id = f"{mode}|{self.x_start},{self.x_end}"
+        xs = self.x_start if x_start is None else x_start
+        xe = self.x_end if x_end is None else x_end
+
+        msg.header.frame_id = f"{mode}|{xs},{xe}"
 
         msg.poses = poses
         self.coverage_waypoints_total = len(poses)
