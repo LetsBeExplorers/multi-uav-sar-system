@@ -193,6 +193,7 @@ class UAVStateManager(Node):
                     self._publish_command('START_ASSIST')
                 else:
                     self._transition('RETURNING')
+                    self._publish_command('GO_HOME')
 
             elif event == 'DETECTION_EVENT':
                 self._transition('VERIFYING')
