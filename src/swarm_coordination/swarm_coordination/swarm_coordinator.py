@@ -174,9 +174,7 @@ class SwarmCoordinator(Node):
 
         elif msg.event == 'START_ASSIST':
             self._reset_coverage()
-
-            pair_threshold = self.assist_threshold
-            self._publish_assistive_waypoints(pair_threshold)
+            self._publish_assistive_waypoints(self.threshold)
 
         elif msg.event == 'GO_HOME':
             self._reset_coverage()
