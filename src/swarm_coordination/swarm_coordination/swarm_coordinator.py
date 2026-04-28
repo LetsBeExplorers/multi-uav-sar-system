@@ -82,6 +82,7 @@ class SwarmCoordinator(Node):
         self.last_coverage = 0.0
         self.stall_count = 0
         self._completion_timer = None  # active during the post-refine sync hover
+        self.home_pose = None
 
         # grid cells visited; persists across SEARCHING → REFINING
         self.visited_cells = set()
@@ -111,7 +112,9 @@ class SwarmCoordinator(Node):
             MissionCoverage, '/mission/coverage', self._on_coverage_update, 10)
         self.create_subscription(
             FSMEvent, f'/{self.uav_id}/fsm/command', self._on_fsm_command, 10)
-        
+        self.create_subscription(
+            Odometry, f'/{self.uav_id}/state/odom', self._on_own_odom, 10) # own odometry
+
         # subscribe to all peers' odom so cells they pass through our slice get marked
         for i in range(self.num_uavs):
             peer_id = f'x{i + 1}'
@@ -139,8 +142,47 @@ class SwarmCoordinator(Node):
                 gx, gy = gx_c + dx, gy_c + dy
                 if 0 <= gx < self.slice_w_cells and 0 <= gy < self.slice_h_cells:
                     self.visited_cells.add((gx, gy))
+        
+    def _on_own_odom(self, msg):
+        if self.home_pose is None:
+            self.home_pose = (
+                msg.pose.pose.position.x,
+                msg.pose.pose.position.y
+            )
 
     # ===== FSM Reaction =====
+
+    def _on_fsm_command(self, msg):
+        if msg.uav_id != self.uav_id:
+            return
+
+        self.get_logger().info(f'[{self.uav_id}] COMMAND → {msg.event}')
+
+        # always unpause on explicit command
+        self.is_paused = False
+
+        if msg.event == 'START_SEARCH':
+            self._reset_coverage()
+            self.visited_cells = set()  # fresh mission
+            self.last_coverage = 0.0
+            self.stall_count = 0
+            self._publish_search_waypoints()
+
+        elif msg.event == 'START_REFINEMENT':
+            self._reset_coverage()
+            self.last_coverage = 0.0
+            self.stall_count = 0
+            self._publish_refinement_waypoints()
+
+        elif msg.event == 'START_ASSIST':
+            self._reset_coverage()
+
+            pair_threshold = self.assist_threshold
+            self._publish_assistive_waypoints(pair_threshold)
+
+        elif msg.event == 'GO_HOME':
+            self._reset_coverage()
+            self._send_home_waypoint()
 
     def _on_fsm_state_change(self, msg):
         if msg.uav_id != self.uav_id:
@@ -163,28 +205,6 @@ class SwarmCoordinator(Node):
             return
 
         self.is_paused = False
-
-        if self.current_mode == 'SEARCHING':
-            self._reset_coverage()
-            self.visited_cells = set()  # fresh mission
-            self._publish_search_waypoints()
-            self.last_coverage = 0.0
-            self.stall_count = 0
-
-        elif self.current_mode == 'REFINING':
-            self._reset_coverage()
-            self._publish_refinement_waypoints()
-            self.last_coverage = 0.0
-            self.stall_count = 0
-
-        elif self.current_mode == 'ASSISTING':
-            self._reset_coverage()
-            # match the threshold the FSM just used to pick this UAV as a helper
-            pair_threshold = (
-                self.assist_threshold if msg.previous_state == 'REFINING'
-                else self.threshold
-            )
-            self._publish_assistive_waypoints(pair_threshold)
 
     # ===== Waypoint Generation =====
 
@@ -233,6 +253,16 @@ class SwarmCoordinator(Node):
         )
         self._send_waypoints(poses)
         self._publish_status(f'[{self.uav_id}] ASSISTING → {target_id}')
+
+    def _publish_return_home_waypoints(self):
+        pose = Pose()
+        pose.position.x = 0.0
+        pose.position.y = 0.0
+        pose.position.z = 1.0
+        pose.orientation.w = 1.0
+        self._send_waypoints([pose])
+
+        self._publish_status(f'[{self.uav_id}] RETURNING HOME')
 
     def _send_waypoints(self, poses):
         msg = PoseArray()
