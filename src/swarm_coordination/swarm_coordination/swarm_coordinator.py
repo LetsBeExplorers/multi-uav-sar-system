@@ -178,6 +178,14 @@ class SwarmCoordinator(Node):
             self._reset_coverage()
             self._send_home_waypoint()
 
+        elif msg.event == 'REPLAN':
+            if self.current_mode == 'SEARCHING':
+                self._publish_search_waypoints()
+            elif self.current_mode == 'REFINING':
+                self._publish_refinement_waypoints()
+            elif self.current_mode == 'ASSISTING':
+                self._publish_assistive_waypoints(self.threshold)
+
     def _on_fsm_state_change(self, msg):
         if msg.uav_id != self.uav_id:
             return
