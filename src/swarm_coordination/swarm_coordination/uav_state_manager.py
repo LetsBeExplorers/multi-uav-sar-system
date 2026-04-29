@@ -275,12 +275,6 @@ class UAVStateManager(Node):
         msg.timestamp = self.get_clock().now().nanoseconds / 1e9
         self._state_pub.publish(msg)
 
-    def _publish_target_detected(self):
-        # stub — detection module will provide full location data when integrated
-        msg = String()
-        msg.data = f'{self.uav_id}:TARGET_LOCK'
-        self._target_pub.publish(msg)
-
     def _publish_command(self, event):
         msg = FSMEvent()
         msg.uav_id = self.uav_id
