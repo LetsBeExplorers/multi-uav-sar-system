@@ -1,4 +1,5 @@
 import time
+import math
 
 from geometry_msgs.msg import Pose, PoseArray
 from nav_msgs.msg import Odometry
@@ -54,6 +55,8 @@ class SwarmCoordinator(Node):
                 ('completion_wait_sec', 1.5),  # brief sync hover before deciding
                 ('resolution', 1.0),
                 ('coverage_radius', 0.7),  # sensor footprint radius (m) for cell marking
+                ('sensor_fov_deg', 60.0),
+                ('flight_altitude', 1.0),
             ]
         )
 
@@ -64,7 +67,12 @@ class SwarmCoordinator(Node):
         self.threshold = self.get_parameter('threshold').value
         self.completion_wait_sec = self.get_parameter('completion_wait_sec').value
         self.resolution = self.get_parameter('resolution').value
-        self.coverage_radius = self.get_parameter('coverage_radius').value
+
+        # compute coverage radius from sensor fov
+        fov = math.radians(self.get_parameter('sensor_fov_deg').value)
+        altitude = self.get_parameter('flight_altitude').value
+
+        self.coverage_radius = altitude * math.tan(fov / 2)
 
         # ===== Region assignment =====
         uav_ids = [f'x{i + 1}' for i in range(self.num_uavs)]
@@ -219,10 +227,16 @@ class SwarmCoordinator(Node):
     # ===== Waypoint Generation =====
 
     def _publish_search_waypoints(self):
+        ymin, ymax = self.area[2], self.area[3]
+        height = ymax - ymin
+
+        row_spacing = 2 * self.coverage_radius * 0.8  # 20% overlap
+        self.rows = max(2, int(height / row_spacing))
+
         poses = _lawnmower(
             self.x_start, self.x_end,
-            self.area[2], self.area[3],
-            self.rows
+            ymin, ymax,
+            rows
         )
         self._send_waypoints(poses, mode="SEARCH")
         self._publish_status(
