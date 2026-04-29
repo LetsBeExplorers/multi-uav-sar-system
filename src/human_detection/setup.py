@@ -24,7 +24,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'detection_node = detection_module.detection_node:main'
+            'detection_node = human_detection.detection_node:main',
+            'verification_node = human_detection.verification_node:main',
         ],
-    }
+    },
 )
