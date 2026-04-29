@@ -1,4 +1,6 @@
 from setuptools import find_packages, setup
+import os
+from glob import glob
 
 package_name = 'sar_system'
 
@@ -12,7 +14,11 @@ setup(
 
         ('share/' + package_name, ['package.xml']),
 
-        ('share/' + package_name + '/launch', ['launch/system.launch.py']),
+        # launch files
+        (os.path.join('share', package_name, 'launch'), glob('launch/*.py')),
+
+        # configs
+        (os.path.join('share', package_name, 'config'), glob('config/*.yaml')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
