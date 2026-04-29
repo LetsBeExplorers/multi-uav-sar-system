@@ -4,7 +4,7 @@ import time
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-from sar_msgs.msg import MissionCoverage, UAVState
+from sar_msgs.msg import MissionCoverage, UAVState, Alert
 from std_msgs.msg import Empty, String
 
 
@@ -31,6 +31,7 @@ class MissionManager(Node):
         self.uav_states = {uid: 'IDLE' for uid in self.uav_ids}
         self.uav_coverage = {uid: 0.0 for uid in self.uav_ids}
         self.uav_area = {uid: (0.0, 0.0) for uid in self.uav_ids}  # (covered, assigned) m²
+        self.alert_log = []
 
         # ===== Publishers =====
         self._start_pub = self.create_publisher(Empty, '/mission/start', 10)
@@ -41,6 +42,7 @@ class MissionManager(Node):
         # ===== Subscribers =====
         self.create_subscription(UAVState, '/uav/state', self._on_uav_state_change, 10)
         self.create_subscription(String, '/mission/status', self._on_status, 10)
+        self.create_subscription(Alert, '/alerts', self._on_alert, 10)
 
     # ===== State Tracking =====
 
@@ -85,6 +87,16 @@ class MissionManager(Node):
         msg.timestamp = self.get_clock().now().nanoseconds / 1e9
         self._coverage_pub.publish(msg)
 
+    # ===== Alerts =====
+
+    def _on_alert(self, msg):
+        self.alert_log.append(msg)
+
+        # keep only last 5 alerts (prevents spam explosion)
+        self.alert_log = self.alert_log[-5:]
+
+        self._refresh_dashboard()
+
     # ===== Dashboard =====
 
     def _refresh_dashboard(self):
@@ -103,6 +115,16 @@ class MissionManager(Node):
                 print(
                     f'{uid} | {state:<12} | coverage: {cov * 100:5.1f}% '
                     f'| area: {covered:6.1f} / {assigned:6.1f} m²'
+                )
+
+        print('\n=== ALERTS ===')
+
+        if not self.alert_log:
+            print('None')
+        else:
+            for alert in reversed(self.alert_log):
+                print(
+                    f'[{alert.uav_id}] {alert.level:<8} | {alert.type:<18} | {alert.message}'
                 )
 
         print('\nCommands: start | end | stop | exit')
@@ -141,7 +163,7 @@ class MissionManager(Node):
         self.get_logger().debug('HALT sent')
 
     def _wait_for_subscribers(self, pub, timeout=5.0):
-        """Block until all UAVs are subscribed to `pub` or timeout expires."""
+        # Block until all UAVs are subscribed to `pub` or timeout expires.
         deadline = time.time() + timeout
         while pub.get_subscription_count() < len(self.uav_ids):
             if time.time() > deadline:
