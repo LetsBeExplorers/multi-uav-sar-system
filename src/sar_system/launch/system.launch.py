@@ -135,4 +135,31 @@ def generate_launch_description():
             }]
         ))
 
+        # Detection node
+        nodes.append(Node(
+            package='human_detection',
+            executable='detection_node',
+            name='detection_node_' + uav,
+            parameters=[{
+                'uav_id': uav,
+                'confidence_threshold': cfg['confidence_threshold'],
+                'persistence_threshold': cfg['persistence_threshold'],
+                'detection_rate_hz': cfg['detection_rate_hz'],
+                'fake_detection_probability': cfg['fake_detection_probability'],
+            }]
+        ))
+
+        # Verification node
+        nodes.append(Node(
+            package='human_detection',
+            executable='verification_node',
+            name='verification_node_' + uav,
+            parameters=[{
+                'uav_id': uav,
+                'verify_delay_min': cfg['verify_delay_min'],
+                'verify_delay_max': cfg['verify_delay_max'],
+                'verify_confirm_probability': cfg['verify_confirm_probability'],
+            }]
+        ))
+
     return LaunchDescription(nodes)

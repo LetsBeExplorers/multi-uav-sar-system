@@ -22,3 +22,14 @@ speed: 2.0
 speed_x2: 0.5            # TEMP: slow x2 for ASSIST testing
 waypoint_threshold: 0.2
 lookahead: 8
+
+# Detection params
+confidence_threshold: 0.5
+persistence_threshold: 3
+detection_rate_hz: 5.0
+fake_detection_probability: 0.05
+
+# Verification params
+verify_delay_min: 2.0
+verify_delay_max: 5.0
+verify_confirm_probability: 0.7
