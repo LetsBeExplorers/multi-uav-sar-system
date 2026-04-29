@@ -53,7 +53,7 @@ class SwarmCoordinator(Node):
                 ('threshold', 0.90),
                 ('completion_wait_sec', 1.5),  # brief sync hover before deciding
                 ('resolution', 1.0),
-                ('coverage_radius', 1.0),  # sensor footprint radius (m) for cell marking
+                ('coverage_radius', 0.7),  # sensor footprint radius (m) for cell marking
             ]
         )
 
@@ -298,9 +298,11 @@ class SwarmCoordinator(Node):
 
         self.coverage_waypoints_visited += 1
 
-        assigned_area = (self.x_end - self.x_start) * (self.area[3] - self.area[2])
+        # Report area from cells directly so covered/assigned are consistent.
+        cell_area = self.resolution * self.resolution
+        assigned_area = self.total_cells * cell_area
         coverage_ratio = len(self.visited_cells) / self.total_cells if self.total_cells else 0.0
-        area_covered = coverage_ratio * assigned_area
+        area_covered = len(self.visited_cells) * cell_area
 
         self._publish_status(
             f'[{self.uav_id}] PROGRESS: '
@@ -387,9 +389,9 @@ class SwarmCoordinator(Node):
         # 5Hz heartbeat so peers see fresh grid coverage between waypoint hits
         if self.total_cells == 0 or self.current_mode in ('IDLE', 'RETURNING', 'EMERGENCY_STOP'):
             return
-        assigned_area = (self.x_end - self.x_start) * (self.area[3] - self.area[2])
-        coverage_ratio = len(self.visited_cells) / self.total_cells
-        area_covered = coverage_ratio * assigned_area
+        cell_area = self.resolution * self.resolution
+        assigned_area = self.total_cells * cell_area
+        area_covered = len(self.visited_cells) * cell_area
         self._publish_status(
             f'[{self.uav_id}] PROGRESS: '
             f'{self.coverage_waypoints_visited}/{max(self.coverage_waypoints_total, 1)} '
