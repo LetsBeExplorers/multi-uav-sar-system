@@ -1,6 +1,7 @@
 import random
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import Empty
 from sar_msgs.msg import DetectionEvent, FSMEvent, Alert
 
 
@@ -28,16 +29,19 @@ class DetectionNode(Node):
         self.consecutive_detections = 0
         self.last_alert_time = 0.0
         self.alert_cooldown = 2.0  # seconds
+        self.mission_active = False
+        self.start_time = 0.0
+        self.warmup_duration = 5.0  # seconds
+        self.detection_active = False
 
         # ===== Publishers =====
-        self._detection_pub = self.create_publisher(
-            DetectionEvent, f'/{self.uav_id}/detection/event', 10)
+        self._detection_pub = self.create_publisher(DetectionEvent, f'/{self.uav_id}/detection/event', 10)
+        self._fsm_pub = self.create_publisher(FSMEvent, f'/{self.uav_id}/fsm/event', 10)
+        self._alert_pub = self.create_publisher(Alert, '/alerts', 10)
 
-        self._fsm_pub = self.create_publisher(
-            FSMEvent, f'/{self.uav_id}/fsm/event', 10)
-
-        self._alert_pub = self.create_publisher(
-            Alert, '/alerts', 10)
+        # ===== Subscribers =====
+        self.create_subscription(Empty, '/mission/start', self._on_start, 10)
+        self.create_subscription(Empty, '/mission/stop', self._on_stop, 10)
 
         # ===== Timers =====
         self.create_timer(1.0 / rate, self._tick)
@@ -45,18 +49,70 @@ class DetectionNode(Node):
     # ===== Core Loop =====
 
     def _tick(self):
+        if not self.mission_active:
+            return
+
+        now = self.get_clock().now().nanoseconds / 1e9
+
+        # warmup guard
+        if now - self.start_time < self.warmup_duration:
+            return
+
         confidence = self._simulate_detection()
 
         if confidence < self.confidence_threshold:
             self.consecutive_detections = 0
+            self.detection_active = False   # reset state
             return
 
         self.consecutive_detections += 1
+
         if self.consecutive_detections < self.persistence_threshold:
             return
 
-        self._handle_detection(confidence)
+        # detection becomes active (edge trigger)
+        if not self.detection_active:
+            self._handle_detection(confidence)
+            self.detection_active = True
+
+    # ===== Callbacks =====
+
+    def _on_start(self, _msg):
+        self.mission_active = True
+        self.start_time = self.get_clock().now().nanoseconds / 1e9
+
+        # reset detection state
         self.consecutive_detections = 0
+        self.detection_active = False
+
+        # alert so dashboard updates
+        alert = Alert()
+        alert.uav_id = self.uav_id
+        alert.level = 'INFO'
+        alert.type = 'MISSION_START'
+        alert.message = 'Detection started'
+        alert.timestamp = self.start_time
+
+        self._alert_pub.publish(alert)
+
+    def _on_stop(self, _msg):
+        self.mission_active = False
+
+        # reset detection state
+        self.consecutive_detections = 0
+        self.detection_active = False
+
+        now = self.get_clock().now().nanoseconds / 1e9
+
+        # alert so dashboard updates
+        alert = Alert()
+        alert.uav_id = self.uav_id
+        alert.level = 'INFO'
+        alert.type = 'MISSION_STOP'
+        alert.message = 'Detection halted'
+        alert.timestamp = now
+
+        self._alert_pub.publish(alert)
 
     # ===== Detection Logic =====
 
@@ -97,7 +153,7 @@ class DetectionNode(Node):
         msg = Alert()
         msg.uav_id = self.uav_id
         msg.level = 'WARNING'
-        msg.type = 'DETECTION'
+        msg.type = 'DETECTION_EVENT'
         msg.message = f'Possible human detected (confidence={confidence:.2f})'
         msg.timestamp = timestamp
 

@@ -97,6 +97,14 @@ class MissionManager(Node):
 
         self._refresh_dashboard()
 
+    def _color(self, level):
+        if level == 'CRITICAL':
+            return '\033[91m'  # red
+        elif level == 'WARNING':
+            return '\033[93m'  # yellow
+        else:
+            return '\033[0m'
+
     # ===== Dashboard =====
 
     def _refresh_dashboard(self):
@@ -123,8 +131,9 @@ class MissionManager(Node):
             print('None')
         else:
             for alert in reversed(self.alert_log):
+                color = self._color(alert.level)
                 print(
-                    f'[{alert.uav_id}] {alert.level:<8} | {alert.type:<18} | {alert.message}'
+                    f'{color}[{alert.uav_id}] {alert.level:<8} | {alert.type:<18} | {alert.message}\033[0m'
                 )
 
         print('\nCommands: start | end | stop | exit')
