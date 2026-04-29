@@ -5,7 +5,11 @@ import rclpy
 from human_detection.detection_node import DetectionNode
 from human_detection.verification_node import VerificationNode
 from sar_msgs.msg import FSMEvent
+import human_detection.detection_node as detection_mod
+import human_detection.verification_node as verification_mod
 
+
+# ===== Fixtures =====
 
 @pytest.fixture(scope='module', autouse=True)
 def ros_context():
@@ -14,85 +18,208 @@ def ros_context():
     rclpy.shutdown()
 
 
+@pytest.fixture
+def detection_node():
+    """A DetectionNode with all publishers stubbed out and sensible defaults."""
+    node = DetectionNode()
+    node.confidence_threshold = 0.5
+    node.persistence_threshold = 3
+    node.fake_prob = 1.0  # always trigger fake detection unless overridden
+    node._fsm_pub.publish = lambda msg: node._fsm_published.append(msg)
+    node._detection_pub.publish = lambda msg: node._detection_published.append(msg)
+    node._alert_pub.publish = lambda msg: node._alert_published.append(msg)
+    node._fsm_published = []
+    node._detection_published = []
+    node._alert_published = []
+    # Pre-arm mission so _tick runs without needing /mission/start.
+    node.mission_active = True
+    node.start_time = node.get_clock().now().nanoseconds / 1e9 - 100.0  # past warmup
+    yield node
+    node.destroy_node()
+
+
+@pytest.fixture
+def verification_node():
+    """A VerificationNode with publishers stubbed out."""
+    node = VerificationNode()
+    node._fsm_pub.publish = lambda msg: node._fsm_published.append(msg)
+    node._alert_pub.publish = lambda msg: node._alert_published.append(msg)
+    node._fsm_published = []
+    node._alert_published = []
+    yield node
+    node.destroy_node()
+
+
 # ===== Detection node =====
 
-def test_detection_below_threshold_does_not_publish():
-    uut = DetectionNode()
-    uut.confidence_threshold = 0.5
-    uut.persistence_threshold = 1
-    published = []
-    uut._fsm_pub.publish = lambda msg: published.append(msg)
-    # simulate a low-confidence "look" by patching the random draw
-    import human_detection.detection_node as mod
-    orig = mod.random.random
-    mod.random.random = lambda: 0.0  # always trigger fake detection
-    mod.random.uniform = lambda a, b: 0.3  # below threshold
-    try:
-        uut._tick()
-    finally:
-        mod.random.random = orig
-    assert published == []
-    assert uut.consecutive_detections == 0
-    uut.destroy_node()
+def test_detection_below_threshold_does_not_publish(detection_node, monkeypatch):
+    monkeypatch.setattr(detection_mod.random, 'random', lambda: 0.0)  # fake fires
+    monkeypatch.setattr(detection_mod.random, 'uniform', lambda a, b: 0.3)  # < 0.5
+
+    detection_node._tick()
+
+    assert detection_node._fsm_published == []
+    assert detection_node.consecutive_detections == 0
 
 
-def test_detection_requires_persistence():
-    uut = DetectionNode()
-    uut.confidence_threshold = 0.5
-    uut.persistence_threshold = 3
-    uut.fake_prob = 1.0
-    published = []
-    uut._fsm_pub.publish = lambda msg: published.append(msg)
-    uut._detection_pub.publish = lambda msg: None
+def test_detection_requires_persistence(detection_node, monkeypatch):
+    monkeypatch.setattr(detection_mod.random, 'random', lambda: 0.0)
+    monkeypatch.setattr(detection_mod.random, 'uniform', lambda a, b: 0.9)
 
-    import human_detection.detection_node as mod
-    mod.random.random = lambda: 0.0
-    mod.random.uniform = lambda a, b: 0.9  # always passes threshold
+    detection_node._tick()
+    detection_node._tick()
+    assert detection_node._fsm_published == []  # not enough yet
 
-    uut._tick()
-    uut._tick()
-    assert published == []  # not enough yet
-    uut._tick()
-    assert len(published) == 1
-    assert published[0].event == 'DETECTION_EVENT'
-    uut.destroy_node()
+    detection_node._tick()
+    assert len(detection_node._fsm_published) == 1
+    assert detection_node._fsm_published[0].event == 'DETECTION_EVENT'
+    # Confidence is now exposed on the FSM event.
+    assert detection_node._fsm_published[0].value == pytest.approx(0.9)
+
+
+def test_detection_suppressed_during_warmup(detection_node, monkeypatch):
+    # Reset start_time to "now" so we're inside the warmup window.
+    detection_node.start_time = detection_node.get_clock().now().nanoseconds / 1e9
+    monkeypatch.setattr(detection_mod.random, 'random', lambda: 0.0)
+    monkeypatch.setattr(detection_mod.random, 'uniform', lambda a, b: 0.9)
+
+    for _ in range(10):
+        detection_node._tick()
+
+    assert detection_node._fsm_published == []
+    assert detection_node.consecutive_detections == 0
+
+
+def test_detection_suppressed_when_mission_inactive(detection_node, monkeypatch):
+    detection_node.mission_active = False
+    monkeypatch.setattr(detection_mod.random, 'random', lambda: 0.0)
+    monkeypatch.setattr(detection_mod.random, 'uniform', lambda a, b: 0.9)
+
+    for _ in range(10):
+        detection_node._tick()
+
+    assert detection_node._fsm_published == []
+
+
+def test_on_stop_clears_state(detection_node):
+    detection_node.consecutive_detections = 2
+    detection_node.detection_active = True
+
+    detection_node._on_stop(None)
+
+    assert detection_node.mission_active is False
+    assert detection_node.consecutive_detections == 0
+    assert detection_node.detection_active is False
+
+
+def test_detection_re_triggers_after_confidence_drop(detection_node, monkeypatch):
+    """After a streak fires, a confidence drop should re-arm the edge trigger."""
+    monkeypatch.setattr(detection_mod.random, 'random', lambda: 0.0)
+    monkeypatch.setattr(detection_mod.random, 'uniform', lambda a, b: 0.9)
+
+    # First streak — fire once.
+    for _ in range(detection_node.persistence_threshold):
+        detection_node._tick()
+    assert len(detection_node._fsm_published) == 1
+
+    # Drop below threshold — should reset detection_active.
+    monkeypatch.setattr(detection_mod.random, 'uniform', lambda a, b: 0.1)
+    detection_node._tick()
+    assert detection_node.detection_active is False
+    assert detection_node.consecutive_detections == 0
+
+    # New streak — should fire again.
+    monkeypatch.setattr(detection_mod.random, 'uniform', lambda a, b: 0.9)
+    for _ in range(detection_node.persistence_threshold):
+        detection_node._tick()
+    assert len(detection_node._fsm_published) == 2
+
+
+def test_detection_alert_uses_documented_type(detection_node, monkeypatch):
+    monkeypatch.setattr(detection_mod.random, 'random', lambda: 0.0)
+    monkeypatch.setattr(detection_mod.random, 'uniform', lambda a, b: 0.9)
+
+    for _ in range(detection_node.persistence_threshold):
+        detection_node._tick()
+
+    assert len(detection_node._alert_published) == 1
+    # Alert.msg documents type as one of: DETECTION, CONFIRMATION, ERROR.
+    assert detection_node._alert_published[0].type == 'DETECTION'
+    assert detection_node._alert_published[0].level == 'WARNING'
 
 
 # ===== Verification node =====
 
-def test_verification_ignores_other_uavs_commands():
-    uut = VerificationNode()
+def test_verification_ignores_other_uavs_commands(verification_node):
     msg = FSMEvent()
     msg.uav_id = 'x2'  # not us
     msg.event = 'START_VERIFY'
-    uut._on_command(msg)
-    assert uut._verify_timer is None
-    uut.destroy_node()
+    verification_node._on_command(msg)
+    assert verification_node._verify_timer is None
 
 
-def test_verification_starts_timer_on_start_verify():
-    uut = VerificationNode()
+def test_verification_ignores_unknown_events(verification_node):
     msg = FSMEvent()
-    msg.uav_id = uut.uav_id
+    msg.uav_id = verification_node.uav_id
+    msg.event = 'SOMETHING_ELSE'
+    verification_node._on_command(msg)
+    assert verification_node._verify_timer is None
+
+
+def test_verification_starts_timer_on_start_verify(verification_node):
+    msg = FSMEvent()
+    msg.uav_id = verification_node.uav_id
     msg.event = 'START_VERIFY'
-    uut._on_command(msg)
-    assert uut._verify_timer is not None
-    uut._verify_timer.cancel()
-    uut.destroy_node()
+    verification_node._on_command(msg)
+    assert verification_node._verify_timer is not None
+    assert verification_node._timeout_timer is not None
 
 
-def test_verification_decide_publishes_confirmed_or_false():
-    uut = VerificationNode()
-    published = []
-    uut._fsm_pub.publish = lambda msg: published.append(msg)
+def test_verification_second_start_replaces_first_timer(verification_node):
+    msg = FSMEvent()
+    msg.uav_id = verification_node.uav_id
+    msg.event = 'START_VERIFY'
 
-    import human_detection.verification_node as mod
-    mod.random.random = lambda: 0.0  # below confirm_prob → CONFIRMED
-    uut._decide()
-    assert published[-1].event == 'CONFIRMED_TARGET'
+    verification_node._on_command(msg)
+    first = verification_node._verify_timer
 
-    mod.random.random = lambda: 1.0  # above → FALSE_POSITIVE
-    uut._decide()
-    assert published[-1].event == 'FALSE_POSITIVE'
+    verification_node._on_command(msg)
+    second = verification_node._verify_timer
 
-    uut.destroy_node()
+    assert first is not second
+    assert verification_node._verify_timer is not None
+
+
+def test_verification_decide_publishes_confirmed(verification_node, monkeypatch):
+    monkeypatch.setattr(verification_mod.random, 'random', lambda: 0.0)  # < confirm_prob
+    verification_node._decide()
+    assert verification_node._fsm_published[-1].event == 'CONFIRMED_TARGET'
+    assert verification_node._alert_published[-1].level == 'CRITICAL'
+    assert verification_node._alert_published[-1].type == 'CONFIRMATION'
+
+
+def test_verification_decide_publishes_false_positive(verification_node, monkeypatch):
+    monkeypatch.setattr(verification_mod.random, 'random', lambda: 1.0)  # > confirm_prob
+    verification_node._decide()
+    assert verification_node._fsm_published[-1].event == 'FALSE_POSITIVE'
+    assert verification_node._alert_published[-1].level == 'INFO'
+
+
+def test_verification_timeout_publishes_timeout_event(verification_node):
+    verification_node._on_timeout()
+    assert verification_node._fsm_published[-1].event == 'TIMEOUT'
+    assert verification_node._alert_published[-1].type == 'ERROR'
+
+
+def test_verification_decide_clears_timers(verification_node, monkeypatch):
+    msg = FSMEvent()
+    msg.uav_id = verification_node.uav_id
+    msg.event = 'START_VERIFY'
+    verification_node._on_command(msg)
+    assert verification_node._verify_timer is not None
+
+    monkeypatch.setattr(verification_mod.random, 'random', lambda: 0.0)
+    verification_node._decide()
+
+    assert verification_node._verify_timer is None
+    assert verification_node._timeout_timer is None
