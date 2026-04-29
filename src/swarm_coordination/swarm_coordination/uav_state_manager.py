@@ -75,7 +75,6 @@ class UAVStateManager(Node):
 
         # ===== Publishers =====
         self._state_pub = self.create_publisher(UAVState, '/uav/state', 10)
-        self._target_pub = self.create_publisher(String, '/fsm/target_detected', 10)
         self._command_pub = self.create_publisher(FSMEvent, f'/{self.uav_id}/fsm/command', 10)
 
         # ===== Subscribers =====
@@ -258,7 +257,6 @@ class UAVStateManager(Node):
 
         # target lock
         if new_state == 'TARGET_LOCK':
-            self._publish_target_detected()
             self._publish_command('STOP')
 
         # returning
