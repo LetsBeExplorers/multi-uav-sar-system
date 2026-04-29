@@ -4,7 +4,7 @@ import time
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-from sar_msgs.msg import MissionCoverage, UAVState, Alert
+from sar_msgs.msg import MissionCoverage, UAVState, Alert, DetectionEvent
 from std_msgs.msg import Empty, String
 
 
@@ -32,6 +32,9 @@ class MissionManager(Node):
         self.uav_coverage = {uid: 0.0 for uid in self.uav_ids}
         self.uav_area = {uid: (0.0, 0.0) for uid in self.uav_ids}  # (covered, assigned) m²
         self.alert_log = []
+        self.target_goal = 0
+        self.targets_found = 0
+        self.confirmed_targets = []
 
         # ===== Publishers =====
         self._start_pub = self.create_publisher(Empty, '/mission/start', 10)
@@ -43,6 +46,7 @@ class MissionManager(Node):
         self.create_subscription(UAVState, '/uav/state', self._on_uav_state_change, 10)
         self.create_subscription(String, '/mission/status', self._on_status, 10)
         self.create_subscription(Alert, '/alerts', self._on_alert, 10)
+        self.create_subscription(DetectionEvent, '/targets/confirmed', self._on_target_confirmed, 10)
 
     # ===== State Tracking =====
 
@@ -50,8 +54,12 @@ class MissionManager(Node):
         if msg.uav_id in self.uav_states:
             self.uav_states[msg.uav_id] = msg.state
 
-        if all(s == 'IDLE' for s in self.uav_states.values()) and self.mission_state == 'RUNNING':
-            self.mission_state = 'COMPLETE'
+        if (
+            self.target_goal == 0 and
+            all(s == 'IDLE' for s in self.uav_states.values()) and
+            self.mission_state == 'RUNNING'
+        ):
+            self._complete_mission()
 
         self._refresh_dashboard()
 
@@ -105,12 +113,32 @@ class MissionManager(Node):
         else:
             return '\033[0m'
 
+
+    def _on_target_confirmed(self, msg):
+        if self.mission_state != 'RUNNING':
+            return
+            
+        new_target = (msg.x, msg.y)
+
+        # prevent duplicates
+        for (x, y) in self.confirmed_targets:
+            if abs(x - new_target[0]) < 1.0 and abs(y - new_target[1]) < 1.0:
+                return
+
+        self.confirmed_targets.append(new_target)
+        self.targets_found += 1
+
+        if self.targets_found >= self.target_goal:
+            self._complete_mission()
+
     # ===== Dashboard =====
 
     def _refresh_dashboard(self):
         print('\033[H\033[J', end='')
         print('=== MISSION STATUS ===')
         print(f'Mission: {self.mission_state}')
+        if self.mission_state in ['RUNNING', 'COMPLETE']:
+            print(f'Targets: {self.targets_found}/{self.target_goal}')
 
         if self.mission_state == 'IDLE':
             print('\nWaiting for start command...')
@@ -140,17 +168,24 @@ class MissionManager(Node):
 
     # ===== Operator Interface =====
 
-    def send_start(self):
+    def send_start(self, target_goal):
         if self.mission_state == 'RUNNING':
             print('Mission already running')
             return
+
+        self.target_goal = target_goal
+        self.targets_found = 0
+        self.confirmed_targets = []
+
+        print(f'Starting mission with target goal: {target_goal}')
+
         self._wait_for_subscribers(self._start_pub)
         self.mission_state = 'RUNNING'
         self.uav_states = {uid: 'IDLE' for uid in self.uav_ids}
         self.uav_coverage = {uid: 0.0 for uid in self.uav_ids}
         self.uav_area = {uid: (0.0, 0.0) for uid in self.uav_ids}
+
         self._start_pub.publish(Empty())
-        self.get_logger().debug('START sent')
 
     def send_stop(self):
         if self.mission_state == 'IDLE':
@@ -179,6 +214,14 @@ class MissionManager(Node):
                 return
             time.sleep(0.1)
 
+    def _complete_mission(self):
+        if self.mission_state == 'COMPLETE':
+            return
+
+        self.mission_state = 'COMPLETE'
+        self._wait_for_subscribers(self._stop_pub)
+        self._stop_pub.publish(Empty())
+
 
 def _safe_spin(node):
     try:
@@ -199,8 +242,21 @@ def main(args=None):
     try:
         while rclpy.ok():
             cmd = input('>> ').strip().lower()
-            if cmd == 'start':
-                node.send_start()
+            parts = cmd.split()
+            if not parts:
+                continue
+
+            if parts[0] == 'start':
+                if len(parts) > 1:
+                    try:
+                        target_goal = int(parts[1])
+                    except ValueError:
+                        print('Invalid number of targets')
+                        continue
+                else:
+                    target_goal = 0  # default
+
+                node.send_start(target_goal)
             elif cmd == 'end':
                 node.send_stop()
             elif cmd == 'stop':
