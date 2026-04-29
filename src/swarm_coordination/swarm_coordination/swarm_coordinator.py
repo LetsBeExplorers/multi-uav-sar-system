@@ -236,7 +236,7 @@ class SwarmCoordinator(Node):
         poses = _lawnmower(
             self.x_start, self.x_end,
             ymin, ymax,
-            rows
+            self.rows
         )
         self._send_waypoints(poses, mode="SEARCH")
         self._publish_status(
