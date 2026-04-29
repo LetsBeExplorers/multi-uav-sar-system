@@ -80,39 +80,14 @@ class DetectionNode(Node):
     def _on_start(self, _msg):
         self.mission_active = True
         self.start_time = self.get_clock().now().nanoseconds / 1e9
-
-        # reset detection state
         self.consecutive_detections = 0
         self.detection_active = False
 
-        # alert so dashboard updates
-        alert = Alert()
-        alert.uav_id = self.uav_id
-        alert.level = 'INFO'
-        alert.type = 'MISSION_START'
-        alert.message = 'Detection started'
-        alert.timestamp = self.start_time
-
-        self._alert_pub.publish(alert)
 
     def _on_stop(self, _msg):
         self.mission_active = False
-
-        # reset detection state
         self.consecutive_detections = 0
         self.detection_active = False
-
-        now = self.get_clock().now().nanoseconds / 1e9
-
-        # alert so dashboard updates
-        alert = Alert()
-        alert.uav_id = self.uav_id
-        alert.level = 'INFO'
-        alert.type = 'MISSION_STOP'
-        alert.message = 'Detection halted'
-        alert.timestamp = now
-
-        self._alert_pub.publish(alert)
 
     # ===== Detection Logic =====
 
