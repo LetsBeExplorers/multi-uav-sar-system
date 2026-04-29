@@ -1,7 +1,7 @@
 import random
 import rclpy
 from rclpy.node import Node
-from sar_msgs.msg import FSMEvent, Alert
+from sar_msgs.msg import FSMEvent, Alert, DetectionEvent
 
 
 class VerificationNode(Node):
@@ -28,6 +28,7 @@ class VerificationNode(Node):
         self._verify_timer = None
         self._timeout_timer = None
         self._deciding = False  # re-entry guard
+        self._last_detection = None  # (x, y, confidence) of most recent detection
 
         # ===== Publishers =====
         self._fsm_pub = self.create_publisher(FSMEvent, f'/{self.uav_id}/fsm/event', 10)
@@ -35,6 +36,7 @@ class VerificationNode(Node):
 
         # ===== Subscribers =====
         self.create_subscription(FSMEvent, f'/{self.uav_id}/fsm/command', self._on_command, 10)
+        self.create_subscription(DetectionEvent, f'/{self.uav_id}/detection/event', self._on_detection, 10)
 
     # ===== Callbacks =====
 
@@ -44,6 +46,12 @@ class VerificationNode(Node):
 
         if msg.event == 'START_VERIFY':
             self._start_verification()
+
+    def _on_detection(self, msg):
+        # Cache the most recent detection so we can report its location on confirm.
+        if msg.uav_id != self.uav_id:
+            return
+        self._last_detection = (msg.x, msg.y, msg.confidence)
 
     # ===== Core Logic =====
 
@@ -107,7 +115,7 @@ class VerificationNode(Node):
         if result == 'CONFIRMED_TARGET':
             msg.level = 'CRITICAL'
             msg.type = 'CONFIRMATION'
-            msg.message = 'Target confirmed'
+            msg.message = self._format_target_message()
         elif result == 'TIMEOUT':
             msg.level = 'WARNING'
             msg.type = 'ERROR'
@@ -118,6 +126,12 @@ class VerificationNode(Node):
             msg.message = 'False detection'
 
         self._alert_pub.publish(msg)
+
+    def _format_target_message(self):
+        if self._last_detection is None:
+            return 'Target confirmed (location unknown)'
+        x, y, conf = self._last_detection
+        return f'Target confirmed at ({x:.1f}, {y:.1f}) conf={conf:.2f}'
 
 
 def main(args=None):
