@@ -144,6 +144,8 @@ class AStarNavigationNode(Node):
         for radius in range(1, 4):
             for dx in range(-radius, radius + 1):
                 for dy in range(-radius, radius + 1):
+                    if abs(dx) != radius and abs(dy) != radius:
+                        continue
                     nx, ny = gx + dx, gy + dy
 
                     # stay inside section bounds
@@ -283,7 +285,7 @@ class AStarNavigationNode(Node):
             return grid_flat[gy * width + gx] <= 0
 
         def heuristic(a, b):
-            return abs(a[0] - b[0]) + abs(a[1] - b[1])
+            return 0.8 * (abs(a[0] - b[0]) + abs(a[1] - b[1]))
 
         def neighbors(cell):
             x, y = cell
@@ -311,12 +313,22 @@ class AStarNavigationNode(Node):
                 return path
 
             for nb in neighbors(current):
-                step_cost = 1
                 nx, ny = nb
-                for ddx, ddy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+
+                step_cost = 1
+
+                # penalty if adjacent to obstacle (1 cell away)
+                for ddx, ddy in ((1,0), (-1,0), (0,1), (0,-1)):
                     ax, ay = nx + ddx, ny + ddy
                     if in_bounds(ax, ay) and grid_flat[ay * width + ax] > 0:
-                        step_cost = 10  # neighbor touches an obstacle — keep clearance
+                        step_cost += 3
+                        break
+
+                # slight penalty for 2 cells away
+                for ddx, ddy in ((2,0), (-2,0), (0,2), (0,-2)):
+                    ax, ay = nx + ddx, ny + ddy
+                    if in_bounds(ax, ay) and grid_flat[ay * width + ax] > 0:
+                        step_cost += 1
                         break
 
                 # soft region penalty (only after entering region)
@@ -349,8 +361,8 @@ class AStarNavigationNode(Node):
         for gx, gy in cells:
             pose = PoseStamped()
             pose.header = path_msg.header
-            pose.pose.position.x = float(gx * resolution + origin_x)
-            pose.pose.position.y = float(gy * resolution + origin_y)
+            pose.pose.position.x = float((gx + 0.5) * resolution + origin_x)
+            pose.pose.position.y = float((gy + 0.5) * resolution + origin_y)
             pose.pose.position.z = 0.0
             pose.pose.orientation.w = 1.0
             path_msg.poses.append(pose)
