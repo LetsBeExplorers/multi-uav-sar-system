@@ -1,0 +1,24 @@
+# Mission
+num_uavs: 3
+threshold: 0.90
+
+# Coverage area
+area_bounds: [-10, 10, -10, 10]
+rows: 7
+
+# Occupancy grid
+grid_width: 21
+grid_height: 21
+resolution: 1.0
+origin_x: -10.0
+origin_y: -10.0
+collision_threshold: 0.5
+
+# Navigation
+replan_check_rate: 2.0
+
+# Path execution
+speed: 2.0
+speed_x2: 0.5            # TEMP: slow x2 for ASSIST testing
+waypoint_threshold: 0.2
+lookahead: 8
