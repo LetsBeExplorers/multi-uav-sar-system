@@ -1,69 +1,76 @@
-// DETECTION MODULE - detection_node.py
-// Vision-based human detection using YOLOv8
-// Filters detections temporally before publishing to FSM
+import random
+import rclpy
+from rclpy.node import Node
+from sar_msgs.msg import DetectionEvent, FSMEvent
 
-PARAMETERS:
-  uav_id
-  model_path          // path to yolo weights
-  confidence_threshold  // minimum confidence e.g. 0.5
-  persistence_threshold // consecutive frames required e.g. 3
 
-SUBSCRIPTIONS:
-  /{uav_id}/camera/image    → on_image_received()
-  /uav/state                → on_state_change()  // know when VERIFYING
+class DetectionNode(Node):
+    def __init__(self):
+        super().__init__('detection_node')
 
-PUBLICATIONS:
-  /{uav_id}/fsm/event       → FSMEvent.msg (DETECTION_EVENT, CONFIRMED_TARGET, FALSE_POSITIVE)
+        self.declare_parameters(namespace='', parameters=[
+            ('uav_id', 'x1'),
+            ('confidence_threshold', 0.5),
+            ('persistence_threshold', 3),
+            ('detection_rate_hz', 5.0),
+            ('fake_detection_probability', 0.05),
+        ])
 
-STATE:
-  model = YOLO(model_path)
-  consecutive_detections = 0
-  current_state = IDLE      // mirrors FSM, know when VERIFYING
-  last_detection = None     // location of last detection
+        self.uav_id = self.get_parameter('uav_id').value
+        self.confidence_threshold = self.get_parameter('confidence_threshold').value
+        self.persistence_threshold = self.get_parameter('persistence_threshold').value
+        rate = self.get_parameter('detection_rate_hz').value
+        self.fake_prob = self.get_parameter('fake_detection_probability').value
 
-// ==============================
-// Image Processing
-// ==============================
+        self.consecutive_detections = 0
 
-on_image_received(msg):
-  if current_state not in [SEARCHING, REFINING, ASSISTING, VERIFYING]:
-    return  // don't process if not actively searching
+        self._detection_pub = self.create_publisher(
+            DetectionEvent, f'/{self.uav_id}/detection/event', 10)
+        self._fsm_pub = self.create_publisher(
+            FSMEvent, f'/{self.uav_id}/fsm/event', 10)
 
-  img = convert msg to cv2 image
-  results = model(img, classes=[0])  // class 0 = person
+        self.create_timer(1.0 / rate, self._tick)
 
-  detections = filter results by confidence_threshold
+    def _tick(self):
+        # STUB: real YOLO replaces this with model inference on a camera frame
+        if random.random() < self.fake_prob:
+            confidence = random.uniform(0.3, 1.0)
+        else:
+            confidence = 0.0
 
-  if detections is empty:
-    consecutive_detections = 0
-    if current_state == VERIFYING:
-      // nothing seen during verification
-      publish → /{uav_id}/fsm/event
-      event: FALSE_POSITIVE
-    return
+        if confidence < self.confidence_threshold:
+            self.consecutive_detections = 0
+            return
 
-  // take highest confidence detection
-  best = detection with highest confidence
-  last_detection = best.location
-  consecutive_detections += 1
+        self.consecutive_detections += 1
+        if self.consecutive_detections < self.persistence_threshold:
+            return
 
-  if consecutive_detections >= persistence_threshold:
-    if current_state == VERIFYING:
-      publish → /{uav_id}/fsm/event
-      event: CONFIRMED_TARGET, value: confidence
-    else:
-      publish → /{uav_id}/fsm/event
-      event: DETECTION_EVENT, value: confidence
-    consecutive_detections = 0  // reset after publishing
+        now = self.get_clock().now().nanoseconds / 1e9
+        det = DetectionEvent()
+        det.uav_id = self.uav_id
+        det.x = random.uniform(-10, 10)
+        det.y = random.uniform(-10, 10)
+        det.confidence = confidence
+        det.timestamp = now
+        self._detection_pub.publish(det)
 
-// ==============================
-// State Tracking
-// ==============================
+        evt = FSMEvent()
+        evt.uav_id = self.uav_id
+        evt.event = 'DETECTION_EVENT'
+        evt.timestamp = now
+        self._fsm_pub.publish(evt)
 
-on_state_change(UAVState msg):
-  current_state = msg.state
-  
-  // reset on new search state
-  if current_state == SEARCHING:
-    consecutive_detections = 0
-    last_detection = None
+        self.consecutive_detections = 0
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = DetectionNode()
+    rclpy.spin(node)
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
