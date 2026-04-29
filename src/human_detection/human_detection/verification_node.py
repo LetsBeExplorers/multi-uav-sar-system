@@ -32,6 +32,7 @@ class VerificationNode(Node):
 
         # ===== Publishers =====
         self._fsm_pub = self.create_publisher(FSMEvent, f'/{self.uav_id}/fsm/event', 10)
+        self._target_pub = self.create_publisher(DetectionEvent, '/targets/confirmed', 10)
         self._alert_pub = self.create_publisher(Alert, '/alerts', 10)
 
         # ===== Subscribers =====
@@ -96,9 +97,14 @@ class VerificationNode(Node):
         now = self.get_clock().now().nanoseconds / 1e9
 
         self._publish_fsm_event(now, result)
-        self._publish_alert(now, result)
 
-    # ===== Publishers =====
+        if result == 'CONFIRMED_TARGET':
+            self._publish_confirmed_target()
+
+        alert_msg = self._create_alert(result, now)
+        self._alert_pub.publish(alert_msg)
+
+        # ===== Publishers =====
 
     def _publish_fsm_event(self, timestamp, event):
         msg = FSMEvent()
@@ -106,6 +112,20 @@ class VerificationNode(Node):
         msg.event = event
         msg.timestamp = timestamp
         self._fsm_pub.publish(msg)
+
+    def _publish_confirmed_target(self):
+        if self._last_detection is None:
+            return
+
+        x, y, conf = self._last_detection
+
+        msg = DetectionEvent()
+        msg.uav_id = self.uav_id
+        msg.x = x
+        msg.y = y
+        msg.confidence = conf
+
+        self._target_pub.publish(msg)
 
     def _publish_alert(self, timestamp, result):
         msg = Alert()
