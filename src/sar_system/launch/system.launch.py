@@ -50,7 +50,6 @@ def generate_launch_description():
                 'uav_id': uav,
                 'num_uavs': cfg['num_uavs'],
                 'area_bounds': cfg['area_bounds'],
-                'rows': cfg['rows'],
                 'threshold': cfg['threshold'],
             }]
         ))

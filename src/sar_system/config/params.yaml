@@ -4,7 +4,6 @@ threshold: 0.90
 
 # Coverage area
 area_bounds: [-10, 10, -10, 10]
-rows: 7
 
 # Occupancy grid
 grid_width: 21
