@@ -104,7 +104,7 @@ class MapViewer(Node):
 
     def _target_callback(self, msg):
         # store multiple
-        self.targets = [(msg.x, msg.y)]
+        self.targets.append((msg.x, msg.y))
 
     # ===== Drawing =====
 
