@@ -1,4 +1,5 @@
 import heapq
+import math
 from typing import Dict, List, Optional, Tuple
 
 from geometry_msgs.msg import PoseArray, PoseStamped
@@ -136,7 +137,7 @@ class AStarNavigationNode(Node):
 
     # ===== Planning =====
 
-    def _find_nearest_free(self, goal, grid_flat, width):
+    def _find_nearest_free(self, goal, grid_flat, width, from_pos=None):
         height = len(grid_flat) // width
         gx, gy = goal
         origin_x = self._cached_grid.info.origin.position.x
@@ -205,8 +206,8 @@ class AStarNavigationNode(Node):
         # adjust goal if it's blocked (e.g., another UAV is sitting there)
         idx = goal[1] * width + goal[0]
 
-        if grid_flat[idx] > 0:   # only if actually blocked
-            goal = self._find_nearest_free(goal, grid_flat, width)
+        if grid_flat[idx] > 0:
+            goal = self._find_nearest_free(goal, grid_flat, width, from_pos=start)
         path = self._astar(start, goal, grid_flat, width)
 
         if path is not None and self.mode == "GO_HOME":
