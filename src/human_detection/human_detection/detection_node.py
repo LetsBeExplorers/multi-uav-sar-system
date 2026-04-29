@@ -2,6 +2,7 @@ import random
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Empty
+from nav_msgs.msg import Odometry
 from sar_msgs.msg import DetectionEvent, FSMEvent, Alert
 
 
@@ -31,6 +32,7 @@ class DetectionNode(Node):
         self.start_time = None  # set by _on_start; None == no mission yet
         self.warmup_duration = 5.0  # seconds
         self.detection_active = False
+        self.current_position = None
 
         # ===== Publishers =====
         self._detection_pub = self.create_publisher(DetectionEvent, f'/{self.uav_id}/detection/event', 10)
@@ -40,6 +42,7 @@ class DetectionNode(Node):
         # ===== Subscribers =====
         self.create_subscription(Empty, '/mission/start', self._on_start, 10)
         self.create_subscription(Empty, '/mission/stop', self._on_stop, 10)
+        self.create_subscription(Odometry, f'/{self.uav_id}/state/odom', self._on_odom, 10)
 
         # ===== Timers =====
         self.create_timer(1.0 / rate, self._tick)
@@ -90,6 +93,12 @@ class DetectionNode(Node):
         self.consecutive_detections = 0
         self.detection_active = False
 
+    def _on_odom(self, msg):
+        self.current_position = (
+            msg.pose.pose.position.x,
+            msg.pose.pose.position.y
+        )
+
     # ===== Detection Logic =====
 
     def _simulate_detection(self):
@@ -109,8 +118,14 @@ class DetectionNode(Node):
     def _publish_detection(self, timestamp, confidence):
         msg = DetectionEvent()
         msg.uav_id = self.uav_id
-        msg.x = random.uniform(-10, 10)
-        msg.y = random.uniform(-10, 10)
+        if self.current_position is None:
+            return  # don't publish until we know where we are
+
+        px, py = self.current_position
+
+        # small random offset around UAV
+        msg.x = px + random.uniform(-1.0, 1.0)
+        msg.y = py + random.uniform(-1.0, 1.0)
         msg.confidence = confidence
         msg.timestamp = timestamp
         self._detection_pub.publish(msg)
