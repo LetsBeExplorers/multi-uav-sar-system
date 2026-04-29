@@ -101,8 +101,7 @@ class VerificationNode(Node):
         if result == 'CONFIRMED_TARGET':
             self._publish_confirmed_target()
 
-        alert_msg = self._create_alert(result, now)
-        self._alert_pub.publish(alert_msg)
+        self._publish_alert(now, result)
 
         # ===== Publishers =====
 
