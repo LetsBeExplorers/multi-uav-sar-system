@@ -4,6 +4,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 import rclpy
+from sar_msgs.msg import DetectionEvent
 from nav_msgs.msg import OccupancyGrid, Odometry, Path
 from rclpy.node import Node
 
@@ -26,6 +27,7 @@ class MapViewer(Node):
         self.origin_y = -10.0
         self.resolution = 1.0
         self.current_path = None
+        self.targets = []  # store confirmed targets
         self.goal = None
         self.colors = {
             'x1': 'red',
@@ -52,6 +54,13 @@ class MapViewer(Node):
             Path,
             f'/{grid_source}/nav/planned_path',
             self.path_callback,
+            10
+        )
+
+        self.create_subscription(
+            DetectionEvent,
+            '/targets/confirmed',
+            self._target_callback,
             10
         )
 
@@ -92,6 +101,10 @@ class MapViewer(Node):
         data = np.array(msg.data).reshape((height, width))
         self.last_grid = (data, width, height)
         self._draw()
+
+    def _target_callback(self, msg):
+        # store multiple
+        self.targets = [(msg.x, msg.y)]
 
     # ===== Drawing =====
 
@@ -139,6 +152,20 @@ class MapViewer(Node):
                 markersize=12,
                 markeredgecolor='black'
             )
+
+        # draw confirmed targets
+        label_added = False
+        for (x, y) in self.targets:
+            self.ax.plot(
+                x,
+                y,
+                '*',
+                color='cyan',
+                markersize=15,
+                markeredgecolor='black',
+                label='target' if not label_added else ""
+            )
+            label_added = True
 
         self.ax.set_title('Occupancy Grid + UAV Paths')
         self.ax.set_xlabel('X')
