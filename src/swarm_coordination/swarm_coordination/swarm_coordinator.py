@@ -11,18 +11,23 @@ from std_msgs.msg import Empty, String
 from swarm_coordination.uav_state_manager import assign_helpers
 
 
-def _lawnmower(x_start, x_end, ymin, ymax, rows, reverse=False):
-    # Boustrophedon sweep. reverse=True starts at the top-right corner instead of bottom-left.
+def _lawnmower(x_start, x_end, ymin, ymax, rows, reverse=False, segments_per_row=3):
+    # Boustrophedon sweep; segments_per_row > 1 reduces coverage gaps from obstacle detours.
     poses = []
     row_spacing = (ymax - ymin) / max(rows - 1, 1)
+
     for i in range(rows):
         if reverse:
             y = ymax - i * row_spacing
-            xs = [x_end, x_start] if i % 2 == 0 else [x_start, x_end]
+            xs_endpoints = (x_end, x_start) if i % 2 == 0 else (x_start, x_end)
         else:
             y = ymin + i * row_spacing
-            xs = [x_start, x_end] if i % 2 == 0 else [x_end, x_start]
-        for x in xs:
+            xs_endpoints = (x_start, x_end) if i % 2 == 0 else (x_end, x_start)
+
+        x0, x1 = xs_endpoints
+        for k in range(segments_per_row + 1):
+            t = k / segments_per_row
+            x = x0 + (x1 - x0) * t
             p = Pose()
             p.position.x = float(x)
             p.position.y = float(y)
