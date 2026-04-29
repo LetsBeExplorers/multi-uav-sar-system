@@ -118,8 +118,7 @@ class WorldModelNode(Node):
         return 0 <= gx < self.grid_width and 0 <= gy < self.grid_height
 
     def mark_occupied(self, wx, wy):
-        gx = int((wx - self.origin_x) / self.resolution)
-        gy = int((wy - self.origin_y) / self.resolution)
+        gx, gy = self.world_to_grid(wx, wy)
         if self._in_bounds(gx, gy):
             if self.static_grid[gy][gx] == 0:
                 if self.grid[gy][gx] != -2:  # don't mark occupied if already confirmed free
