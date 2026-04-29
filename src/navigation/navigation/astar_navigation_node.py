@@ -361,7 +361,7 @@ class AStarNavigationNode(Node):
     def _build_path_msg(self, cells, origin_x, origin_y, resolution):
         path_msg = Path()
         path_msg.header.stamp = self.get_clock().now().to_msg()
-        path_msg.header.frame_id = 'map'
+        path_msg.header.frame_id = f'map|{self.mode}'
         for gx, gy in cells:
             pose = PoseStamped()
             pose.header = path_msg.header

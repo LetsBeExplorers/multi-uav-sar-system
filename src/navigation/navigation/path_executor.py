@@ -89,6 +89,10 @@ class PathExecutorNode(Node):
             self.is_returning = False
             return
 
+        # parse mode from frame_id
+        parts = msg.header.frame_id.split('|')
+        self.is_returning = (len(parts) > 1 and parts[1] == 'GO_HOME')
+
         self.current_path = [(p.pose.position.x, p.pose.position.y) for p in msg.poses]
         # extend the path so we end at actual home, not the grid boundary
         if self.is_returning and self.home_x is not None:
