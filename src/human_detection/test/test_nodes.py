@@ -4,7 +4,7 @@ import pytest
 import rclpy
 from human_detection.detection_node import DetectionNode
 from human_detection.verification_node import VerificationNode
-from sar_msgs.msg import FSMEvent
+from sar_msgs.msg import FSMEvent, DetectionEvent
 import human_detection.detection_node as detection_mod
 import human_detection.verification_node as verification_mod
 
@@ -203,6 +203,47 @@ def test_verification_decide_publishes_false_positive(verification_node, monkeyp
     verification_node._decide()
     assert verification_node._fsm_published[-1].event == 'FALSE_POSITIVE'
     assert verification_node._alert_published[-1].level == 'INFO'
+
+
+def test_confirmed_alert_includes_cached_location(verification_node, monkeypatch):
+    """On CONFIRMED_TARGET, the alert message should embed the cached x/y/conf."""
+    detection = DetectionEvent()
+    detection.uav_id = verification_node.uav_id
+    detection.x = 5.2
+    detection.y = -3.4
+    detection.confidence = 0.87
+    detection.timestamp = 0.0
+    verification_node._on_detection(detection)
+
+    monkeypatch.setattr(verification_mod.random, 'random', lambda: 0.0)
+    verification_node._decide()
+
+    msg = verification_node._alert_published[-1].message
+    assert '5.2' in msg
+    assert '-3.4' in msg
+    assert '0.87' in msg
+
+
+def test_confirmed_alert_without_detection_falls_back(verification_node, monkeypatch):
+    """If no detection was ever cached, the alert should not crash and should signal unknown."""
+    monkeypatch.setattr(verification_mod.random, 'random', lambda: 0.0)
+    verification_node._decide()
+
+    msg = verification_node._alert_published[-1].message
+    assert 'unknown' in msg.lower()
+
+
+def test_detection_for_other_uav_is_ignored(verification_node, monkeypatch):
+    """A DetectionEvent from another UAV must not pollute our cached location."""
+    other = DetectionEvent()
+    other.uav_id = 'x99'
+    other.x = 99.0
+    other.y = 99.0
+    other.confidence = 0.99
+    other.timestamp = 0.0
+    verification_node._on_detection(other)
+
+    assert verification_node._last_detection is None
 
 
 def test_verification_timeout_publishes_timeout_event(verification_node):
