@@ -45,6 +45,7 @@ class WorldModelNode(Node):
         self.grid = [[-1] * self.grid_width for _ in range(self.grid_height)]
         self.static_grid = [[0] * self.grid_width for _ in range(self.grid_height)]
         self.dynamic_obstacles = {}
+        self.dynamic_cells = {}   # uav_id -> set of (gx, gy) cells
         self.own_pose = None
         self.collision_count = 0
 
@@ -153,8 +154,8 @@ class WorldModelNode(Node):
         dx = abs(x1 - x0)
         dy = abs(y1 - y0)
         x, y = x0, y0
-        sx = 1 if x1 > x0 else -1
-        sy = 1 if y1 > y0 else -1
+        sx = 1 if x1 > x0 else (-1 if x1 < x0 else 0)
+        sy = 1 if y1 > y0 else (-1 if y1 < y0 else 0)
 
         if dx > dy:
             err = dx / 2.0
@@ -222,7 +223,10 @@ class WorldModelNode(Node):
                     sx + r * dx,
                     sy + r * dy
                 )
-                self._apply_occupied(gx, gy)
+                # don't mark as static obstacle if a known drone is there
+                is_drone = any((gx, gy) in cells for cells in self.dynamic_cells.values())
+                if not is_drone:
+                    self._apply_occupied(gx, gy)
 
     # ===== Dynamic Obstacles =====
 
@@ -239,24 +243,16 @@ class WorldModelNode(Node):
 
         footprint = [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)]
 
-        # clear the full footprint at the old position to avoid ghost cells
-        if uav_id in self.dynamic_obstacles:
-            old_x, old_y = self.dynamic_obstacles[uav_id]
-            ogx, ogy = self.world_to_grid(old_x, old_y)
-            for dx, dy in footprint:
-                nx, ny = ogx + dx, ogy + dy
-                if self._in_bounds(nx, ny) and self.static_grid[ny][nx] == 0:
-                    self.grid[ny][nx] = 0
-
         gx, gy = self.world_to_grid(x, y)
-
+        cells = set()
         for dx, dy in footprint:
             nx, ny = gx + dx, gy + dy
             if self._in_bounds(nx, ny):
-                self.grid[ny][nx] = 4
-
+                cells.add((nx, ny))
+        self.dynamic_cells[uav_id] = cells
         self.dynamic_obstacles[uav_id] = (x, y)
 
+        # collision check (unchanged)
         if self.own_pose is not None:
             ox, oy, _ = self.own_pose
             dist = math.hypot(x - ox, y - oy)
@@ -280,16 +276,23 @@ class WorldModelNode(Node):
         msg.info.origin.position.x = float(self.origin_x)
         msg.info.origin.position.y = float(self.origin_y)
         msg.info.origin.orientation.w = 1.0
+
+        # collect all currently-occupied dynamic cells
+        dynamic = set()
+        for cells in self.dynamic_cells.values():
+            dynamic.update(cells)
+
         flat = []
-        for row in self.grid:
-            for val in row:
-                if val >= 2:
-                    flat.append(100)   # occupied
+        for gy, row in enumerate(self.grid):
+            for gx, val in enumerate(row):
+                if (gx, gy) in dynamic:
+                    flat.append(100)   # other drone
+                elif val >= 4:
+                    flat.append(100)   # real obstacle
                 elif val <= -2:
                     flat.append(0)     # free
                 else:
                     flat.append(-1)    # unknown
-
         msg.data = flat
         self._grid_pub.publish(msg)
 
