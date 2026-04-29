@@ -252,6 +252,10 @@ class UAVStateManager(Node):
         if old_state == 'RECOVERY' and new_state != 'RECOVERY':
             self.recovery_attempts = 0
 
+        # verifying
+        if new_state == 'VERIFYING':
+            self._publish_command('START_VERIFY')
+
         # target lock
         if new_state == 'TARGET_LOCK':
             self._publish_target_detected()
