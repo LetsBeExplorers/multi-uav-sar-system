@@ -11,6 +11,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/MissionCoverage.msg"
   "msg/UAVState.msg"
   "msg/DetectionEvent.msg"
+  "msg/Alert.msg"
   "srv/GetOccupancyGrid.srv"
   DEPENDENCIES std_msgs
 )
