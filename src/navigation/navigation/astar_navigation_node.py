@@ -139,31 +139,35 @@ class AStarNavigationNode(Node):
     def _find_nearest_free(self, goal, grid_flat, width):
         height = len(grid_flat) // width
         gx, gy = goal
+        origin_x = self._cached_grid.info.origin.position.x
+        resolution = self._cached_grid.info.resolution
 
-        # search outward from goal in a small radius
-        for radius in range(1, 4):
+        candidates = []
+        for radius in range(1, 5):
             for dx in range(-radius, radius + 1):
                 for dy in range(-radius, radius + 1):
                     if abs(dx) != radius and abs(dy) != radius:
                         continue
                     nx, ny = gx + dx, gy + dy
+                    if not (0 <= nx < width and 0 <= ny < height):
+                        continue
+                    wx = nx * resolution + origin_x
+                    if not (self.x_min <= wx <= self.x_max):
+                        continue
+                    if grid_flat[ny * width + nx] > 0:
+                        continue
 
-                    # stay inside section bounds
-                    if 0 <= nx < width and 0 <= ny < height:
+                    # count free neighbors (more = better clearance)
+                    clr = sum(
+                        1 for ddx in (-1, 0, 1) for ddy in (-1, 0, 1)
+                        if 0 <= nx+ddx < width and 0 <= ny+ddy < height
+                        and grid_flat[(ny+ddy) * width + (nx+ddx)] <= 0
+                    )
+                    candidates.append((radius - clr * 0.5, (nx, ny)))
 
-                        # convert to world x
-                        origin_x = self._cached_grid.info.origin.position.x
-                        resolution = self._cached_grid.info.resolution
-                        wx = nx * resolution + origin_x
-
-                        # enforce region constraint
-                        if not (self.x_min <= wx <= self.x_max):
-                            continue
-
-                        if grid_flat[ny * width + nx] <= 0:
-                            return (nx, ny)
-
-        # fallback: return original goal if nothing found
+        if candidates:
+            candidates.sort()
+            return candidates[0][1]
         return goal
 
     def _can_plan(self):
