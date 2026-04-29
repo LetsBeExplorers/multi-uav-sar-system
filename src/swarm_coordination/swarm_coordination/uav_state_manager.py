@@ -259,6 +259,7 @@ class UAVStateManager(Node):
         # target lock
         if new_state == 'TARGET_LOCK':
             self._publish_target_detected()
+            self._publish_command('STOP')
 
         # returning
         if new_state == 'RETURNING':
