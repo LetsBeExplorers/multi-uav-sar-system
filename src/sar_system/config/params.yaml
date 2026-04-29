@@ -27,7 +27,7 @@ lookahead: 8
 confidence_threshold: 0.5
 persistence_threshold: 3
 detection_rate_hz: 5.0
-fake_detection_probability: 0.05
+fake_detection_probability: 0.2
 
 # Verification params
 verify_delay_min: 2.0
