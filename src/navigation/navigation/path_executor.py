@@ -24,7 +24,7 @@ class PathExecutorNode(Node):
                 ('uav_id', 'x1'),
                 ('speed', 2.0),
                 ('waypoint_threshold', 0.2),
-                ('lookahead', 5),
+                ('lookahead', 8),
             ]
         )
 

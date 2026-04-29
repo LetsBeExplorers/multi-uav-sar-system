@@ -140,7 +140,7 @@ def generate_launch_description():
                     'uav_id': uav,
                     'speed': 0.5 if uav == 'x2' else 2.0,  # TEMP: slow x2 for ASSIST testing
                     'waypoint_threshold': 0.2,
-                    'lookahead': 5,
+                    'lookahead': 8,
                 }]
             )
         )
