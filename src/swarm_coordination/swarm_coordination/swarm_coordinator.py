@@ -156,7 +156,11 @@ class SwarmCoordinator(Node):
 
         elif msg.event == 'START_REFINEMENT':
             self._reset_coverage()
-            self.last_coverage = 0.0
+            # Seed last_coverage with what we already have from the search phase
+            self.last_coverage = (
+                len(self.visited_cells) / self.total_cells
+                if self.total_cells else 0.0
+            )
             self.stall_count = 0
             self._publish_refinement_waypoints()
 
@@ -286,7 +290,8 @@ class SwarmCoordinator(Node):
         ]
 
         if not uncovered:
-            self._send_waypoints([], mode="REFINE")
+            # Nothing left to refine — finish immediately
+            self._publish_event('REFINEMENT_COMPLETE')
             return
 
         # Convert grid cells to world coordinates
@@ -315,6 +320,11 @@ class SwarmCoordinator(Node):
 
         # higher = fewer waypoints
         poses = poses[::3]
+
+        # All candidates filtered out (isolated / unreachable)
+        if not poses:
+            self._publish_event('REFINEMENT_COMPLETE')
+            return
 
         # sort for slightly smoother path (left → right sweep)
         poses.sort(key=lambda p: (p.position.y, p.position.x))
