@@ -22,13 +22,13 @@ class MapViewer(Node):
         # ===== State =====
         self.paths = {uid: [] for uid in self.uav_ids}
         self.positions = {uid: None for uid in self.uav_ids}
-        self.last_grid = None
         self.origin_x = -10.0
         self.origin_y = -10.0
         self.resolution = 1.0
         self.current_path = None
         self.targets = []  # store confirmed targets
         self.goal = None
+        self.grids = {}
         self.colors = {
             'x1': 'red',
             'x2': 'green',
@@ -36,17 +36,19 @@ class MapViewer(Node):
         }
 
         # ===== Subscribers =====
-        self.create_subscription(
-            OccupancyGrid,
-            f'/{grid_source}/world_model/grid',
-            self.callback,
-            10
-        )
+
         for uid in self.uav_ids:
             self.create_subscription(
                 Odometry,
                 f'/{uid}/state/odom',
                 lambda msg, u=uid: self.odom_callback(u, msg),
+                10
+            )
+
+            self.create_subscription(
+                OccupancyGrid,
+                f'/{uid}/world_model/grid',
+                lambda msg, u=uid: self.grid_callback(u, msg),
                 10
             )
 
@@ -68,6 +70,20 @@ class MapViewer(Node):
         self.fig, self.ax = plt.subplots(figsize=(8, 8))
 
     # ===== Callbacks =====
+
+    def grid_callback(self, uid, msg):
+        data = np.array(msg.data).reshape((msg.info.height, msg.info.width))
+        self.grids[uid] = (data, msg.info)
+
+        # use first grid as reference frame
+        if len(self.grids) == 1:
+            self.origin_x = msg.info.origin.position.x
+            self.origin_y = msg.info.origin.position.y
+            self.resolution = msg.info.resolution
+            self.width = msg.info.width
+            self.height = msg.info.height
+
+        self._draw()
 
     def path_callback(self, msg):
         if msg.poses:
@@ -92,26 +108,30 @@ class MapViewer(Node):
         if not path or (x - path[-1][0]) ** 2 + (y - path[-1][1]) ** 2 > 0.04:
             path.append((x, y))
 
-    def callback(self, msg):
-        width = msg.info.width
-        height = msg.info.height
-        self.origin_x = msg.info.origin.position.x
-        self.origin_y = msg.info.origin.position.y
-        self.resolution = msg.info.resolution
-        data = np.array(msg.data).reshape((height, width))
-        self.last_grid = (data, width, height)
-        self._draw()
-
     def _target_callback(self, msg):
         # store multiple
         self.targets.append((msg.x, msg.y))
 
     # ===== Drawing =====
 
+    def _merge_grids(self):
+        if not self.grids:
+            return None
+
+        # assume same size/resolution for now
+        grids = [g[0] for g in self.grids.values()]
+        merged = np.full_like(grids[0], -1)
+
+        for g in grids:
+            known = g != -1
+            merged = np.maximum.reduce(grids)
+
+        return merged
+
     def _draw(self):
-        if self.last_grid is None:
+        if not self.grids:
             return
-        data, width, height = self.last_grid
+        data = self._merge_grids()
 
         self.ax.clear()
 
@@ -122,9 +142,9 @@ class MapViewer(Node):
 
         extent = [
             self.origin_x,
-            self.origin_x + width * self.resolution,
+            self.origin_x + self.width * self.resolution,
             self.origin_y,
-            self.origin_y + height * self.resolution,
+            self.origin_y + self.height * self.resolution,
         ]
         self.ax.imshow(display, cmap='gray', origin='lower', vmin=0, vmax=1, extent=extent)
 
