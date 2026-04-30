@@ -7,7 +7,7 @@ from unittest.mock import patch
 from mission_manager.mission_manager import MissionManager
 import pytest
 import rclpy
-from sar_msgs.msg import MissionCoverage, UAVState, DetectionEvent
+from sar_msgs.msg import MissionCoverage, UAVState, DetectionEvent, UAVCoverage
 from std_msgs.msg import Empty, String
 
 
@@ -29,20 +29,26 @@ def _spin(a, b, count=20):
 # ===== MissionManager =====
 
 def test_progress_updates_coverage():
-    """PROGRESS status string updates the coverage ratio for the named UAV."""
+    """UAVCoverage updates the coverage ratio for the named UAV."""
     with patch.object(MissionManager, '_refresh_dashboard'):
         uut = MissionManager()
         helper = rclpy.create_node('test_progress_helper')
+
         coverage_msgs = []
         helper.create_subscription(
             MissionCoverage, '/mission/coverage', coverage_msgs.append, 10)
-        pub = helper.create_publisher(String, '/mission/status', 10)
+
+        pub = helper.create_publisher(UAVCoverage, '/uav/coverage', 10)
 
         _spin(uut, helper, 10)
 
-        msg = String()
-        msg.data = '[x1] PROGRESS: 50/100'
+        msg = UAVCoverage()
+        msg.uav_id = 'x1'
+        msg.covered_area = 50.0
+        msg.assigned_area = 100.0
+        msg.timestamp = 0.0
         pub.publish(msg)
+
         _spin(uut, helper, 20)
 
         assert len(coverage_msgs) > 0
@@ -58,16 +64,21 @@ def test_all_complete_flag():
     with patch.object(MissionManager, '_refresh_dashboard'):
         uut = MissionManager()
         helper = rclpy.create_node('test_complete_helper')
+
         coverage_msgs = []
         helper.create_subscription(
             MissionCoverage, '/mission/coverage', coverage_msgs.append, 10)
-        pub = helper.create_publisher(String, '/mission/status', 10)
+
+        pub = helper.create_publisher(UAVCoverage, '/uav/coverage', 10)
 
         _spin(uut, helper, 10)
 
         for uid in ['x1', 'x2', 'x3']:
-            msg = String()
-            msg.data = f'[{uid}] PROGRESS: 96/100'
+            msg = UAVCoverage()
+            msg.uav_id = uid
+            msg.covered_area = 96.0
+            msg.assigned_area = 100.0
+            msg.timestamp = 0.0
             pub.publish(msg)
             _spin(uut, helper, 10)
 
@@ -83,16 +94,22 @@ def test_below_threshold_not_complete():
     with patch.object(MissionManager, '_refresh_dashboard'):
         uut = MissionManager()
         helper = rclpy.create_node('test_incomplete_helper')
+
         coverage_msgs = []
         helper.create_subscription(
             MissionCoverage, '/mission/coverage', coverage_msgs.append, 10)
-        pub = helper.create_publisher(String, '/mission/status', 10)
+
+        pub = helper.create_publisher(UAVCoverage, '/uav/coverage', 10)
 
         _spin(uut, helper, 10)
 
-        msg = String()
-        msg.data = '[x1] PROGRESS: 50/100'
+        msg = UAVCoverage()
+        msg.uav_id = 'x1'
+        msg.covered_area = 50.0
+        msg.assigned_area = 100.0
+        msg.timestamp = 0.0
         pub.publish(msg)
+
         _spin(uut, helper, 20)
 
         assert len(coverage_msgs) > 0
@@ -220,6 +237,91 @@ def test_duplicate_targets_not_counted():
 
         assert uut.targets_found == 1
         assert uut.mission_state == 'RUNNING'
+
+        uut.destroy_node()
+        helper.destroy_node()
+
+
+def test_target_goal_not_reached():
+    """Mission stays RUNNING if target goal is not yet reached."""
+    with patch.object(MissionManager, '_refresh_dashboard'):
+        uut = MissionManager()
+        uut.mission_state = 'RUNNING'
+        uut.target_goal = 3
+
+        helper = rclpy.create_node('test_target_not_reached')
+        pub = helper.create_publisher(DetectionEvent, '/targets/confirmed', 10)
+
+        _spin(uut, helper, 10)
+
+        msg = DetectionEvent()
+        msg.x = 1.0
+        msg.y = 2.0
+        pub.publish(msg)
+
+        _spin(uut, helper, 10)
+
+        assert uut.targets_found == 1
+        assert uut.mission_state == 'RUNNING'
+
+        uut.destroy_node()
+        helper.destroy_node()
+
+
+def test_target_goal_exact_completion():
+    """Mission completes exactly when target goal is reached."""
+    with patch.object(MissionManager, '_refresh_dashboard'):
+        uut = MissionManager()
+        uut.mission_state = 'RUNNING'
+        uut.target_goal = 2
+
+        helper = rclpy.create_node('test_target_exact')
+        pub = helper.create_publisher(DetectionEvent, '/targets/confirmed', 10)
+
+        _spin(uut, helper, 10)
+
+        for x, y in [(1.0, 2.0), (5.0, 6.0)]:
+            msg = DetectionEvent()
+            msg.x = x
+            msg.y = y
+            pub.publish(msg)
+            _spin(uut, helper, 10)
+
+        assert uut.targets_found == 2
+        assert uut.mission_state == 'COMPLETE'
+
+        uut.destroy_node()
+        helper.destroy_node()
+
+def test_target_goal_ignores_extra_targets():
+    """Extra targets after completion do not change state."""
+    with patch.object(MissionManager, '_refresh_dashboard'):
+        uut = MissionManager()
+        uut.mission_state = 'RUNNING'
+        uut.target_goal = 1
+
+        helper = rclpy.create_node('test_target_extra')
+        pub = helper.create_publisher(DetectionEvent, '/targets/confirmed', 10)
+
+        _spin(uut, helper, 10)
+
+        msg1 = DetectionEvent()
+        msg1.x = 1.0
+        msg1.y = 2.0
+        pub.publish(msg1)
+        _spin(uut, helper, 10)
+
+        assert uut.mission_state == 'COMPLETE'
+
+        # extra target
+        msg2 = DetectionEvent()
+        msg2.x = 10.0
+        msg2.y = 20.0
+        pub.publish(msg2)
+        _spin(uut, helper, 10)
+
+        assert uut.targets_found == 1  # unchanged
+        assert uut.mission_state == 'COMPLETE'
 
         uut.destroy_node()
         helper.destroy_node()
