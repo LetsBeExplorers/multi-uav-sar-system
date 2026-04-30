@@ -53,6 +53,10 @@ class MissionManager(Node):
         self.create_subscription(Alert, '/alerts', self._on_alert, 10)
         self.create_subscription(DetectionEvent, '/targets/confirmed', self._on_target_confirmed, 10)
 
+        # ===== Mission timing =====
+        self.mission_start_time = None
+        self._summary_written = False
+
         # ===== Results Logging =====
         if not self.is_test:
             results_dir = "results"
@@ -63,6 +67,7 @@ class MissionManager(Node):
 
             self.csv_file = open(self.results_file_path, 'w', newline='')
             self.csv_writer = csv.writer(self.csv_file)
+            # Event log header
             self.csv_writer.writerow(['time', 'uav_id', 'event_type'])
         else:
             self.csv_file = None
@@ -163,6 +168,7 @@ class MissionManager(Node):
             return
 
         self.mission_state = 'COMPLETE'
+        self._log_mission_summary(success=True)
         self._wait_for_subscribers(self._complete_pub)
         self._complete_pub.publish(Empty())
 
@@ -172,6 +178,39 @@ class MissionManager(Node):
     def _log_failure(self, msg, t):
         if self.csv_writer:
             self.csv_writer.writerow([t, msg.uav_id, msg.type])
+            self.csv_file.flush()
+
+    def _log_mission_summary(self, success=False):
+        if self._summary_written or not self.csv_writer:
+            return
+        self._summary_written = True
+
+        t_end = time.time()
+        mission_time = round(t_end - self.mission_start_time, 2) if self.mission_start_time else -1
+
+        # Per-UAV coverage
+        coverages = {uid: round(self.uav_coverage.get(uid, 0.0), 4) for uid in self.uav_ids}
+        avg_coverage = round(sum(coverages.values()) / len(coverages), 4) if coverages else 0.0
+
+        collision_count = sum(1 for f in self.failures if 'COLLISION' in f.get('type', '').upper())
+        path_fail_count = sum(1 for f in self.failures if f.get('type', '').upper() == 'REPLAN_FAIL')
+
+        # Write a blank separator line then the summary block
+        self.csv_writer.writerow([])
+        self.csv_writer.writerow(['--- MISSION SUMMARY ---'])
+        self.csv_writer.writerow(['success', 'mission_time_s', 'targets_found',
+                                  'avg_coverage', 'collisions', 'path_failures',
+                                  *[f'coverage_{uid}' for uid in self.uav_ids]])
+        self.csv_writer.writerow([
+            int(success),
+            mission_time,
+            self.targets_found,
+            avg_coverage,
+            collision_count,
+            path_fail_count,
+            *[coverages[uid] for uid in self.uav_ids],
+        ])
+        self.csv_file.flush()
 
     # ===== UI =====
 
@@ -229,6 +268,8 @@ class MissionManager(Node):
         self.target_goal = target_goal
         self.targets_found = 0
         self.confirmed_targets = []
+        self.mission_start_time = time.time()
+        self._summary_written = False
 
         print(f'Starting mission with target goal: {target_goal}')
 
@@ -269,6 +310,8 @@ class MissionManager(Node):
             time.sleep(0.1)
 
     def destroy_node(self):
+        if self.mission_state in ('RUNNING', 'ENDED', 'STOPPED'):
+            self._log_mission_summary(success=(self.mission_state == 'COMPLETE'))
         if self.csv_file:
             self.csv_file.close()
         super().destroy_node()
