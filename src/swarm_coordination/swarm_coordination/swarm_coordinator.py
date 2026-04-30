@@ -200,7 +200,6 @@ class SwarmCoordinator(Node):
             return
 
         self.is_paused = False
-        self._check_coverage_events()
 
     # ===== Callbacks: Navigation =====
 
@@ -288,13 +287,13 @@ class SwarmCoordinator(Node):
             self._send_waypoints([], mode="REFINE")
             return
 
-        poses = []
-        if len(gap_rows) > self.rows * 2:
-            gap_rows = gap_rows[::2]  # take every other row
-
         width = self.x_end - self.x_start
         spacing = 2 * self.coverage_radius * 0.8
         segments = max(2, int(width / spacing))
+
+        poses = []
+        if len(gap_rows) > self.rows * 2:
+            gap_rows = gap_rows[::2]  # take every other row
 
         for gy in gap_rows:
             y = self.area[2] + (gy + 0.5) * self.resolution

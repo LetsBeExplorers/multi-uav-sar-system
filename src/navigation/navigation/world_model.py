@@ -47,7 +47,8 @@ class WorldModelNode(Node):
         self.dynamic_cells = {}   # uav_id -> set of (gx, gy) cells
         self.own_pose = None
         self.collision_count = 0
-        self.last_collision_time = self.get_clock().now()
+        self.last_static_collision_time = self.get_clock().now()
+        self.last_dynamic_collision_time = self.get_clock().now()
         self.collision_cooldown = 1.0
 
         # ===== Static Obstacles =====
@@ -241,11 +242,11 @@ class WorldModelNode(Node):
 
         if self._in_bounds(gx, gy):
             now = self.get_clock().now()
-            dt = (now - self.last_collision_time).nanoseconds / 1e9
+            dt = (now - self.last_static_collision_time).nanoseconds / 1e9
 
             if self.static_grid[gy][gx] == 1 and dt > self.collision_cooldown:
                 self.collision_count += 1
-                self.last_collision_time = now
+                self.last_static_collision_time = now
 
                 event = FSMEvent()
                 event.uav_id = self.uav_id
@@ -275,14 +276,14 @@ class WorldModelNode(Node):
         if self.own_pose is not None:
             ox, oy, _ = self.own_pose
             now = self.get_clock().now()
-            dt = (now - self.last_collision_time).nanoseconds / 1e9
+            dt = (now - self.last_dynamic_collision_time).nanoseconds / 1e9
             own_gx, own_gy = self.world_to_grid(ox, oy)
 
             for cells in self.dynamic_cells.values():
                 if (own_gx, own_gy) in cells:
                     if dt > self.collision_cooldown:
                         self.collision_count += 1
-                        self.last_collision_time = now
+                        self.last_dynamic_collision_time = now
 
                         event = FSMEvent()
                         event.uav_id = self.uav_id
