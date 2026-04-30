@@ -165,8 +165,8 @@ class DetectionNode(Node):
             dist = (dx*dx + dy*dy) ** 0.5
 
             if dist < self.detection_range:
-                msg.x = tx + random.uniform(-0.2, 0.2)
-                msg.y = ty + random.uniform(-0.2, 0.2)
+                msg.x = tx
+                msg.y = ty
                 msg.confidence = random.uniform(0.8, 1.0)
                 msg.timestamp = timestamp
 
