@@ -44,6 +44,7 @@ class MissionManager(Node):
         self._start_pub = self.create_publisher(Empty, '/mission/start', 10)
         self._stop_pub = self.create_publisher(Empty, '/mission/stop', 10)
         self._halt_pub = self.create_publisher(Empty, '/mission/halt', 10)
+        self._force_return_pub = self.create_publisher(Empty, '/mission/force_return', 10)
         self._coverage_pub = self.create_publisher(MissionCoverage, '/mission/coverage', 10)
 
         # ===== Subscribers =====
@@ -242,10 +243,11 @@ class MissionManager(Node):
         if self.mission_state == 'IDLE':
             print('Mission not running')
             return
-        self._wait_for_subscribers(self._stop_pub)
+
+        self._wait_for_subscribers(self._force_return_pub)
         self.mission_state = 'STOPPED'
-        self._stop_pub.publish(Empty())
-        self.get_logger().debug('STOP sent')
+        self._force_return_pub.publish(Empty())
+        self.get_logger().debug('FORCE_RETURN sent')
 
     def send_halt(self):
         if self.mission_state == 'IDLE':

@@ -81,6 +81,7 @@ class UAVStateManager(Node):
         self.create_subscription(Empty, '/mission/start', self._on_mission_start, 10) # starts mission
         self.create_subscription(Empty, '/mission/stop', self._on_mission_stop, 10) # ends mission
         self.create_subscription(Empty, '/mission/halt', self._on_mission_halt, 10) # emergency stop
+        self.create_subscription(Empty, '/mission/force_return', self._on_force_return, 10)
         self.create_subscription(FSMEvent, f'/{self.uav_id}/fsm/event', self._on_fsm_event, 10)
         self.create_subscription(MissionCoverage, '/mission/coverage', self._on_coverage_update, 10)
 
@@ -99,6 +100,9 @@ class UAVStateManager(Node):
         self._transition('EMERGENCY_STOP')
         self._publish_command('STOP')
 
+    def _on_force_return(self, _msg):
+        self._transition('RETURNING')
+
     def _on_fsm_event(self, msg):
         self._handle_event(msg.event, value=msg.value)
 
@@ -109,6 +113,12 @@ class UAVStateManager(Node):
     # ===== Core FSM =====
 
     def _handle_event(self, event: str, value: float = 0.0):
+
+        # ── Tier 0: Operator override (absolute priority) ──
+        if event == 'FORCE_RETURN':
+            self._transition('RETURNING')
+            return
+
         # ── Tier 1: Emergency (any state) ──────────────────────────────────
         if event in ('CRITICAL_FAILURE', 'HARD_COLLISION'):
             self._transition('EMERGENCY_STOP')
