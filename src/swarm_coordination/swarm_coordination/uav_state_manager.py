@@ -264,6 +264,7 @@ class UAVStateManager(Node):
 
         # verifying
         if new_state == 'VERIFYING':
+            self._publish_command('STOP')
             self._publish_command('START_VERIFY')
 
         # target lock
