@@ -7,7 +7,7 @@ from unittest.mock import patch
 from mission_manager.mission_manager import MissionManager
 import pytest
 import rclpy
-from sar_msgs.msg import MissionCoverage, UAVState
+from sar_msgs.msg import MissionCoverage, UAVState, DetectionEvent
 from std_msgs.msg import Empty, String
 
 
