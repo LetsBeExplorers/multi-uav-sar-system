@@ -34,6 +34,7 @@ class MapViewer(Node):
             'x2': 'green',
             'x3': 'blue',
         }
+        self.ground_truth_targets = []
 
         # ===== Subscribers =====
 
@@ -66,10 +67,20 @@ class MapViewer(Node):
             10
         )
 
+        self.create_subscription(
+            DetectionEvent,
+            '/mission/targets',
+            self._mission_target_callback,
+            10
+        )
+
         plt.ion()
         self.fig, self.ax = plt.subplots(figsize=(8, 8))
 
     # ===== Callbacks =====
+
+    def _mission_target_callback(self, msg):
+        self.ground_truth_targets.append((msg.x, msg.y))
 
     def grid_callback(self, uid, msg):
         data = np.array(msg.data).reshape((msg.info.height, msg.info.width))
@@ -171,6 +182,18 @@ class MapViewer(Node):
                 color='yellow',
                 markersize=12,
                 markeredgecolor='black'
+            )
+
+        # draw ground truth targets (light / hollow)
+        for (x, y) in self.ground_truth_targets:
+            self.ax.plot(
+                x, y,
+                'o',
+                color='cyan',
+                markersize=10,
+                markerfacecolor='none',
+                alpha=0.4,
+                linewidth=1.5
             )
 
         # draw confirmed targets
