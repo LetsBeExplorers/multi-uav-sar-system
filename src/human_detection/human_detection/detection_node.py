@@ -63,7 +63,6 @@ class DetectionNode(Node):
 
         if confidence < self.confidence_threshold:
             self.consecutive_detections = 0
-            self.detection_active = False   # reset state — allows re-trigger
             return
 
         self.consecutive_detections += 1
