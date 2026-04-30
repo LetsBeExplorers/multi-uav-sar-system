@@ -38,6 +38,7 @@ class MissionManager(Node):
         self.targets_found = 0
         self.confirmed_targets = []
         self.failures = []
+        self.is_test = 'PYTEST_CURRENT_TEST' in os.environ
 
         # ===== Publishers =====
         self._start_pub = self.create_publisher(Empty, '/mission/start', 10)
@@ -52,37 +53,29 @@ class MissionManager(Node):
         self.create_subscription(DetectionEvent, '/targets/confirmed', self._on_target_confirmed, 10)
 
         # ===== Results Logging =====
-        results_dir = "results"
-        os.makedirs(results_dir, exist_ok=True)
+        if not self.is_test:
+            results_dir = "results"
+            os.makedirs(results_dir, exist_ok=True)
 
-        now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        self.results_file_path = os.path.join("results", f"mission_{now}.csv")
+            now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            self.results_file_path = os.path.join("results", f"mission_{now}.csv")
 
-        self.csv_file = open(self.results_file_path, 'w', newline='')
-        self.csv_writer = csv.writer(self.csv_file)
+            self.csv_file = open(self.results_file_path, 'w', newline='')
+            self.csv_writer = csv.writer(self.csv_file)
+            self.csv_writer.writerow(['time', 'uav_id', 'event_type'])
+        else:
+            self.csv_file = None
+            self.csv_writer = None
 
-        # header
-        self.csv_writer.writerow(['time', 'uav_id', 'event_type'])
 
-    # ===== State Tracking =====
+    # ===== ROS Callbacks =====
 
     def _on_uav_state_change(self, msg):
         if msg.uav_id in self.uav_states:
             self.uav_states[msg.uav_id] = msg.state
 
-        if (
-            self.target_goal == 0 and
-            all(s == 'IDLE' for s in self.uav_states.values()) and
-            self.mission_state == 'RUNNING'
-        ):
-            self._complete_mission()
-
+        self._check_mission_complete()
         self._refresh_dashboard()
-
-    def _on_status(self, msg):
-        self._refresh_dashboard()
-
-    # ===== Coverage Aggregation =====
 
     def _on_coverage_msg(self, msg):
         self._update_coverage(
@@ -91,6 +84,64 @@ class MissionManager(Node):
             msg.assigned_area
         )
         self._refresh_dashboard()
+
+    def _on_alert(self, msg):
+        # dashboard display
+        self.alert_log.append(msg)
+        self.alert_log = self.alert_log[-5:]
+
+        # track failures
+        if msg.level in ('WARNING', 'CRITICAL'):
+            t = self.get_clock().now().nanoseconds / 1e9
+
+            self.failures.append({
+                "uav_id": msg.uav_id,
+                "type": msg.type,
+                "time": t
+            })
+
+            self._log_failure(msg, t)
+
+        self._refresh_dashboard()
+
+    def _on_target_confirmed(self, msg):
+        if self.mission_state != 'RUNNING':
+            return
+            
+        new_target = (msg.x, msg.y)
+
+        # prevent duplicates
+        for (x, y) in self.confirmed_targets:
+            if abs(x - new_target[0]) < 1.0 and abs(y - new_target[1]) < 1.0:
+                return
+
+        self.confirmed_targets.append(new_target)
+        self.targets_found += 1
+        self._check_mission_complete()
+
+
+    # ===== Core Logic =====
+
+    def _check_mission_complete(self):
+        if self.mission_state != 'RUNNING':
+            return
+
+        # target-based completion
+        if self.target_goal > 0 and self.targets_found >= self.target_goal:
+            self._complete_mission()
+            return
+
+        # coverage-based completion
+        if (
+            self.target_goal == 0 and
+            all(s == 'IDLE' for s in self.uav_states.values())
+        ):
+            self._complete_mission()
+
+    def _reset_uav_state(self):
+        self.uav_states = {uid: 'IDLE' for uid in self.uav_ids}
+        self.uav_coverage = {uid: 0.0 for uid in self.uav_ids}
+        self.uav_area = {uid: (0.0, 0.0) for uid in self.uav_ids}
 
     def _update_coverage(self, uav_id, covered, assigned):
         self.uav_area[uav_id] = (covered, assigned)
@@ -106,26 +157,22 @@ class MissionManager(Node):
         msg.timestamp = self.get_clock().now().nanoseconds / 1e9
         self._coverage_pub.publish(msg)
 
-    # ===== Alerts =====
+    def _complete_mission(self):
+        if self.mission_state == 'COMPLETE':
+            return
 
-    def _on_alert(self, msg):
-        # dashboard display
-        self.alert_log.append(msg)
-        self.alert_log = self.alert_log[-5:]
+        self.mission_state = 'COMPLETE'
+        self._wait_for_subscribers(self._stop_pub)
+        self._stop_pub.publish(Empty())
 
-        # track failures
-        if msg.level in ['WARNING', 'CRITICAL']:
-            t = self.get_clock().now().nanoseconds / 1e9
 
-            self.failures.append({
-                "uav_id": msg.uav_id,
-                "type": msg.type,
-                "time": t
-            })
+    # ===== Logging =====
 
+    def _log_failure(self, msg, t):
+        if self.csv_writer:
             self.csv_writer.writerow([t, msg.uav_id, msg.type])
 
-        self._refresh_dashboard()
+    # ===== UI =====
 
     def _color(self, level):
         if level == 'CRITICAL':
@@ -135,27 +182,10 @@ class MissionManager(Node):
         else:
             return '\033[0m'
 
-
-    def _on_target_confirmed(self, msg):
-        if self.mission_state != 'RUNNING':
-            return
-            
-        new_target = (msg.x, msg.y)
-
-        # prevent duplicates
-        for (x, y) in self.confirmed_targets:
-            if abs(x - new_target[0]) < 1.0 and abs(y - new_target[1]) < 1.0:
-                return
-
-        self.confirmed_targets.append(new_target)
-        self.targets_found += 1
-
-        if self.targets_found >= self.target_goal:
-            self._complete_mission()
-
-    # ===== Dashboard =====
-
     def _refresh_dashboard(self):
+        if self.is_test:
+            return
+
         print('\033[H\033[J', end='')
         print('=== MISSION STATUS ===')
         print(f'Mission: {self.mission_state}')
@@ -202,11 +232,10 @@ class MissionManager(Node):
         print(f'Starting mission with target goal: {target_goal}')
 
         self._wait_for_subscribers(self._start_pub)
-        self.mission_state = 'RUNNING'
-        self.uav_states = {uid: 'IDLE' for uid in self.uav_ids}
-        self.uav_coverage = {uid: 0.0 for uid in self.uav_ids}
-        self.uav_area = {uid: (0.0, 0.0) for uid in self.uav_ids}
 
+        self.mission_state = 'RUNNING'
+
+        self._reset_uav_state()
         self._start_pub.publish(Empty())
 
     def send_stop(self):
@@ -229,6 +258,9 @@ class MissionManager(Node):
         self.get_logger().debug('HALT sent')
 
     def _wait_for_subscribers(self, pub, timeout=5.0):
+        if self.is_test:
+            return
+
         # Block until all UAVs are subscribed to `pub` or timeout expires.
         deadline = time.time() + timeout
         while pub.get_subscription_count() < len(self.uav_ids):
@@ -236,13 +268,10 @@ class MissionManager(Node):
                 return
             time.sleep(0.1)
 
-    def _complete_mission(self):
-        if self.mission_state == 'COMPLETE':
-            return
-
-        self.mission_state = 'COMPLETE'
-        self._wait_for_subscribers(self._stop_pub)
-        self._stop_pub.publish(Empty())
+    def destroy_node(self):
+        if self.csv_file:
+            self.csv_file.close()
+        super().destroy_node()
 
 
 def _safe_spin(node):
