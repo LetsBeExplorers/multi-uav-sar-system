@@ -406,8 +406,10 @@ class SwarmCoordinator(Node):
 
         # Early stop for assisting
         if self.current_mode == 'ASSISTING':
-            peer = {uid: r for uid, r in self.coverage_map.items() if uid != self.uav_id}
-            if peer and all(r >= self.threshold for r in peer.values()):
+            pairings = assign_helpers(self.coverage_map, self.threshold)
+            target_id = pairings.get(self.uav_id)
+
+            if target_id is None or self.coverage_map.get(target_id, 0.0) >= self.threshold:
                 self._publish_event('ASSIST_COMPLETE')
                 return
 
