@@ -168,7 +168,7 @@ class MissionManager(Node):
 
     # ===== Operator Interface =====
 
-    def send_start(self, target_goal):
+    def send_start(self, target_goal=0):
         if self.mission_state == 'RUNNING':
             print('Mission already running')
             return
