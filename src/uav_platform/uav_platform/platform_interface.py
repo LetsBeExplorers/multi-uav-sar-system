@@ -27,17 +27,7 @@ class PlatformInterface(Node):
         self.low_battery_thresh = self.get_parameter('low_battery_threshold').value
 
         # ===== State =====
-        self.current_mode = "IDLE"
-        self.last_position = None
-        self.last_move_time = self.get_clock().now()
-
-        self.min_movement = 0.05
-        self.stuck_timeout = 3.0
-
-        self.is_moving_cmd = False
         self.too_close = False
-
-        self.active_modes = {"SEARCHING", "REFINING", "ASSISTING", "RETURNING"}
 
         # ===== Publishers =====
         self.cmd_pub = self.create_publisher(Twist, f'/{self.uav_id}/driver/cmd_vel', 10)
@@ -48,8 +38,6 @@ class PlatformInterface(Node):
         self.create_subscription(Twist, f'/{self.uav_id}/platform/cmd_vel', self._on_cmd, 10)
         self.create_subscription(DriverHealth, f'/{self.uav_id}/driver/health', self._on_health, 10)
         self.create_subscription(LaserScan, f'/{self.uav_id}/scan', self._on_scan, 10)
-        self.create_subscription(Odometry, f'/{self.uav_id}/state/odom', self._on_odom, 10)
-        self.create_subscription(UAVState, '/uav/state', self._on_state, 10)
 
 
     # ===== Command Handling =====
@@ -60,11 +48,6 @@ class PlatformInterface(Node):
         safe.linear.y = max(min(msg.linear.y, self.max_linear), -self.max_linear)
         safe.linear.z = max(min(msg.linear.z, self.max_vertical), -self.max_vertical)
         safe.angular.z = msg.angular.z
-
-        speed = math.hypot(safe.linear.x, safe.linear.y)
-        vertical = abs(safe.linear.z)
-        self.is_moving_cmd = (speed > 0.1 or vertical > 0.1)
-
         self.cmd_pub.publish(safe)
 
 
@@ -93,45 +76,6 @@ class PlatformInterface(Node):
             self.too_close = True
         else:
             self.too_close = False
-
-
-    # ===== Motion Failure =====
-
-    def _on_odom(self, msg):
-        now = self.get_clock().now()
-        pos = msg.pose.pose.position
-
-        if self.last_position is None:
-            self.last_position = pos
-            return
-
-        dx = pos.x - self.last_position.x
-        dy = pos.y - self.last_position.y
-        dist = math.hypot(dx, dy)
-
-        if dist > self.min_movement:
-            self.last_move_time = now
-        else:
-            dt = (now - self.last_move_time).nanoseconds / 1e9
-
-            if (
-                self.current_mode in self.active_modes and
-                self.is_moving_cmd and
-                dt > self.stuck_timeout
-            ):
-                self._alert("PATH_FAILED", "No progress toward goal")
-                self.last_move_time = now
-
-        self.last_position = pos
-
-
-    # ===== FSM State =====
-
-    def _on_state(self, msg):
-        if msg.uav_id != self.uav_id:
-            return
-        self.current_mode = msg.state
-
 
     # ===== Helpers =====
 
