@@ -250,7 +250,7 @@ class WorldModelNode(Node):
 
                 event = FSMEvent()
                 event.uav_id = self.uav_id
-                event.event = 'COLLISION_STATIC'
+                event.event = 'HARD_COLLISION'
                 event.timestamp = self.get_clock().now().nanoseconds / 1e9
 
                 self._event_pub.publish(event)
@@ -288,7 +288,7 @@ class WorldModelNode(Node):
                         event = FSMEvent()
                         event.uav_id = self.uav_id
                         event.timestamp = now.nanoseconds / 1e9
-                        event.event = 'COLLISION_UAV'
+                        event.event = 'HARD_COLLISION'
 
                         self._event_pub.publish(event)
                     break
