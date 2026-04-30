@@ -467,7 +467,6 @@ class SwarmCoordinator(Node):
         msg.value = value
         msg.timestamp = self.get_clock().now().nanoseconds / 1e9
         self._event_pub.publish(msg)
-        self.get_logger().info(f'[{self.uav_id}] event → {event} (value={value:.2f})')
 
 
 def main(args=None):
