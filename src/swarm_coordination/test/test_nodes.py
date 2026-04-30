@@ -68,6 +68,20 @@ def test_refinement_complete_goes_to_assisting():
     uut.destroy_node()
 
 
+def test_assign_helpers_picks_closest_helper():
+    coverage_map = {
+        'x1': 1.0,  # helper
+        'x2': 0.4,  # target
+        'x3': 1.0   # helper
+    }
+
+    pairings = assign_helpers(coverage_map, threshold=0.95)
+
+    # x2 needs help
+    # x1 is closer than x3 → should be chosen
+    assert pairings['x1'] == 'x2'
+    assert 'x3' not in pairings
+
 def test_all_drones_done_from_assisting_goes_to_returning():
     uut = _make_fsm()
     uut.current_state = 'ASSISTING'
@@ -102,12 +116,51 @@ def test_assist_complete_stays_assisting():
     assert uut.current_state == 'ASSISTING'
     uut.destroy_node()
 
+def test_returning_publishes_home_waypoint():
+    """RETURNING actually sends the UAV home"""
+    uut = _make_coordinator()
+    helper = rclpy.create_node('test_return_home_helper')
+
+    from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
+    qos = QoSProfile(
+        depth=1,
+        reliability=ReliabilityPolicy.RELIABLE,
+        durability=DurabilityPolicy.TRANSIENT_LOCAL
+    )
+
+    received = []
+    helper.create_subscription(PoseArray, '/x1/nav/waypoints', received.append, qos)
+
+    _spin(uut, helper, 10)
+    uut.home_pose = (1.0, 2.0)
+    uut._on_fsm_state_change(_make_state_msg('x1', 'RETURNING', 'SEARCHING'))
+    _spin(uut, helper, 20)
+
+    assert len(received) >= 1
+    assert len(received[-1].poses) == 1
+    assert received[-1].poses[0].position.x == pytest.approx(1.0)
+    assert received[-1].poses[0].position.y == pytest.approx(2.0)
+
+    uut.destroy_node()
+    helper.destroy_node()
+
 
 def test_home_reached_goes_to_idle():
     uut = _make_fsm()
     uut.current_state = 'RETURNING'
     uut._handle_event('HOME_REACHED')
     assert uut.current_state == 'IDLE'
+    uut.destroy_node()
+
+
+def test_mode_switch_resets_waypoints():
+    uut = _make_coordinator()
+    uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+    first_total = uut.coverage_waypoints_total
+    uut._on_fsm_state_change(_make_state_msg('x1', 'REFINING', 'SEARCHING'))
+    second_total = uut.coverage_waypoints_total
+    assert second_total != first_total
+    assert uut.coverage_waypoints_visited == 0
     uut.destroy_node()
 
 
@@ -145,6 +198,30 @@ def test_confirmed_target_goes_to_target_lock():
     uut.destroy_node()
 
 
+def test_target_lock_stops_waypoints():
+    uut = _make_coordinator()
+    uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+    assert uut.coverage_waypoints_total > 0
+    uut._on_fsm_state_change(_make_state_msg('x1', 'TARGET_LOCK', 'VERIFYING'))
+    visited_before = uut.coverage_waypoints_visited
+    uut._on_waypoint_reached(Empty())
+    assert uut.coverage_waypoints_visited == visited_before
+    uut.destroy_node()
+
+
+def test_no_waypoints_in_target_lock():
+    uut = _make_coordinator()
+    helper = rclpy.create_node('test_no_waypoints_helper')
+    received = []
+    helper.create_subscription(PoseArray, '/x1/nav/waypoints', received.append, 10)
+    _spin(uut, helper, 10)
+    uut._on_fsm_state_change(_make_state_msg('x1', 'TARGET_LOCK', 'VERIFYING'))
+    _spin(uut, helper, 20)
+    assert len(received) == 0
+    uut.destroy_node()
+    helper.destroy_node()
+
+
 def test_false_positive_resumes_prior_search_state():
     uut = _make_fsm()
     uut.current_state = 'VERIFYING'
@@ -160,6 +237,17 @@ def test_false_positive_falls_back_to_searching_if_prior_not_search():
     uut.previous_state = 'IDLE'
     uut._handle_event('FALSE_POSITIVE')
     assert uut.current_state == 'SEARCHING'
+    uut.destroy_node()
+
+
+def test_no_waypoints_progress_during_verifying():
+    uut = _make_coordinator()
+    uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+    total = uut.coverage_waypoints_total
+    uut._on_fsm_state_change(_make_state_msg('x1', 'VERIFYING', 'SEARCHING'))
+    for _ in range(total):
+        uut._on_waypoint_reached(Empty())
+    assert uut.coverage_waypoints_visited == 0
     uut.destroy_node()
 
 
@@ -656,6 +744,42 @@ def test_assist_complete_when_other_regions_unfinished():
     _spin(uut, helper, 20)
 
     assert any(e.event == 'ASSIST_COMPLETE' for e in events)
+
+    uut.destroy_node()
+    helper.destroy_node()
+
+
+def test_returning_ignores_waypoint_reached():
+    uut = _make_coordinator()
+
+    uut._on_fsm_state_change(_make_state_msg('x1', 'RETURNING', 'SEARCHING'))
+
+    uut._on_waypoint_reached(Empty())
+    uut._on_waypoint_reached(Empty())
+
+    assert uut.coverage_waypoints_visited == 0
+
+    uut.destroy_node()
+
+
+def test_region_complete_emitted_once():
+    uut = _make_coordinator()
+    helper = rclpy.create_node('test_region_once_helper')
+
+    events = []
+    helper.create_subscription(FSMEvent, '/x1/fsm/event', events.append, 10)
+
+    _spin(uut, helper, 10)
+    uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+
+    total = uut.coverage_waypoints_total
+    for _ in range(total + 3):  # overshoot
+        uut._on_waypoint_reached(Empty())
+
+    _spin(uut, helper, 20)
+
+    region_events = [e for e in events if e.event == 'REGION_COMPLETE']
+    assert len(region_events) == 1
 
     uut.destroy_node()
     helper.destroy_node()
