@@ -207,9 +207,6 @@ class SwarmCoordinator(Node):
         if self.is_paused:
             return
 
-        if self.current_mode not in ('SEARCHING', 'REFINING', 'ASSISTING'):
-            return
-
         self.coverage_waypoints_visited += 1
 
         # Report area from cells directly so covered/assigned are consistent.
@@ -368,7 +365,7 @@ class SwarmCoordinator(Node):
     # ===== Coverage Tracking =====
 
     def _update_coverage(self):
-        if self.total_cells == 0 or self.current_mode in ('IDLE', 'RETURNING', 'EMERGENCY_STOP'):
+        if self.total_cells == 0:
             return
 
         cell_area = self.resolution * self.resolution
