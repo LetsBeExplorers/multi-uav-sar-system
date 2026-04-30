@@ -277,40 +277,47 @@ class SwarmCoordinator(Node):
         self._send_waypoints(poses, mode="SEARCH")
 
     def _publish_refinement_waypoints(self):
-        # search rows with unsearched cells
-        gap_rows = self._rows_with_gaps()
+        # Find all uncovered cells in this UAV's slice
+        uncovered = [
+            (gx, gy)
+            for gx in range(self.slice_w_cells)
+            for gy in range(self.slice_h_cells)
+            if (gx, gy) not in self.visited_cells
+        ]
 
-        if not gap_rows:
+        if not uncovered:
             self._send_waypoints([], mode="REFINE")
             return
 
-        width = self.x_end - self.x_start
-        spacing = 2 * self.coverage_radius * 0.8
-        segments = max(2, int(width / spacing))
-
+        # Convert grid cells to world coordinates
         poses = []
-        if len(gap_rows) > self.rows * 2:
-            gap_rows = gap_rows[::2]  # take every other row
-
-        for gy in gap_rows:
+        for gx, gy in uncovered:
+            x = self.x_start + (gx + 0.5) * self.resolution
             y = self.area[2] + (gy + 0.5) * self.resolution
 
-            # alternate direction for efficiency
-            if gy % 2 == 0:
-                xs = (self.x_start, self.x_end)
-            else:
-                xs = (self.x_end, self.x_start)
+            # Skip cells near obstacles (already covered neighbors)
+            neighbor_hits = 0
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    if (gx + dx, gy + dy) in self.visited_cells:
+                        neighbor_hits += 1
 
-            for k in range(segments + 1):
-                t = k / segments
-                x = xs[0] + (xs[1] - xs[0]) * t
+            # If it's completely isolated, skip it (likely unreachable)
+            if neighbor_hits < 2:
+                continue
 
-                p = Pose()
-                p.position.x = float(x)
-                p.position.y = float(y)
-                p.position.z = 1.0
-                p.orientation.w = 1.0
-                poses.append(p)
+            p = Pose()
+            p.position.x = float(x)
+            p.position.y = float(y)
+            p.position.z = 1.0
+            p.orientation.w = 1.0
+            poses.append(p)
+
+        # higher = fewer waypoints
+        poses = poses[::3]
+
+        # sort for slightly smoother path (left → right sweep)
+        poses.sort(key=lambda p: (p.position.y, p.position.x))
 
         self._send_waypoints(poses, mode="REFINE")
 
@@ -427,13 +434,10 @@ class SwarmCoordinator(Node):
                 self.coverage_waypoints_visited = 0
                 self._publish_refinement_waypoints()
                 return
-
-            # hover briefly so peer coverage settles before deciding assist vs home
-            if self._completion_timer is None:
-                self._completion_timer = self.create_timer(
-                    self.completion_wait_sec, self._on_completion_timeout
-                )
-
+            else:
+                self._publish_event('REFINEMENT_COMPLETE')
+                return
+                
         elif self.current_mode == 'ASSISTING':
             self._publish_event('ASSIST_COMPLETE')
 
