@@ -64,26 +64,19 @@ class DetectionNode(Node):
             return
 
         # check if near real target FIRST
-        near_real = False
-
-        if self.current_position is not None:
-            px, py = self.current_position
-            for (tx, ty) in self.targets:
-                dx = tx - px
-                dy = ty - py
-                dist = (dx*dx + dy*dy) ** 0.5
-                if dist < self.detection_range:
-                    near_real = True
-                    break
+        near_real = self._is_near_real_target()
 
         # simulate only for fake detections
-        confidence = self._simulate_detection()
+        if near_real:
+            confidence = random.uniform(0.75, 1.0)
+        else:
+            confidence = self._simulate_detection()
 
         # reset detection when no longer near a real target
         if not near_real:
             self.detection_active = False
 
-        if not near_real and confidence < self.confidence_threshold:
+        if confidence < self.confidence_threshold:
             self.consecutive_detections = 0
             return
 
@@ -134,8 +127,25 @@ class DetectionNode(Node):
     def _handle_detection(self, confidence):
         now = self.get_clock().now().nanoseconds / 1e9
 
+        self._publish_fsm_event(now, confidence)
         self._publish_detection(now, confidence)
         self._publish_alert(now, confidence)
+
+    def _is_near_real_target(self):
+        if self.current_position is None:
+            return False
+
+        px, py = self.current_position
+
+        for (tx, ty) in self.targets:
+            dx = tx - px
+            dy = ty - py
+            dist = (dx * dx + dy * dy) ** 0.5
+
+            if dist < self.detection_range:
+                return True
+
+        return False
 
     # ===== Publishers =====
 
@@ -161,7 +171,6 @@ class DetectionNode(Node):
                 msg.timestamp = timestamp
 
                 self._detection_pub.publish(msg)
-                self._publish_fsm_event(timestamp, msg.confidence)
                 return
 
         # fake detection
@@ -172,7 +181,6 @@ class DetectionNode(Node):
             msg.timestamp = timestamp
 
             self._detection_pub.publish(msg)
-            self._publish_fsm_event(timestamp, msg.confidence)
 
     def _publish_fsm_event(self, timestamp, confidence):
         msg = FSMEvent()
