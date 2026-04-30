@@ -40,12 +40,17 @@ class VerificationNode(Node):
         self.create_subscription(DetectionEvent, f'/{self.uav_id}/detection/event', self._on_detection, 10)
         self.create_subscription(DetectionEvent, '/mission/targets', self._on_target, 10) # temporary
         self.create_subscription(Empty, '/mission/start', self._on_start, 10)
+        self.create_subscription(Empty, '/mission/stop', self._on_stop, 10)
 
     # ===== Callbacks =====
 
     def _on_start(self, _msg):
+        self._last_detection = None
+
+    def _on_stop(self, _msg):
         self.targets = []
         self._last_detection = None
+        self._clear_timers()
 
     def _on_target(self, msg):
         self.targets.append((msg.x, msg.y))
