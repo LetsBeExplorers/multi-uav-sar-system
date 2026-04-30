@@ -213,7 +213,7 @@ class MapViewer(Node):
         self.ax.set_title('Occupancy Grid + UAV Paths')
         self.ax.set_xlabel('X')
         self.ax.set_ylabel('Y')
-        self.ax.legend(loc='upper right')
+        self.ax.legend(loc='center left', bbox_to_anchor=(1.02, 0.5))
         self.ax.set_aspect('equal')
         plt.draw()
         plt.pause(0.001)
