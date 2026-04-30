@@ -94,6 +94,8 @@ class SwarmCoordinator(Node):
         self.stall_count = 0
         self._completion_timer = None  # active during the post-refine sync hover
         self.home_pose = None
+        self._all_done_sent = False
+        self._region_complete_sent = False
 
         # grid cells visited; persists across SEARCHING → REFINING
         self.visited_cells = set()
@@ -149,6 +151,7 @@ class SwarmCoordinator(Node):
             self.visited_cells = set()  # fresh mission
             self.last_coverage = 0.0
             self.stall_count = 0
+            self._all_done_sent = False
             self._publish_search_waypoints()
 
         elif msg.event == 'START_REFINEMENT':
@@ -197,11 +200,15 @@ class SwarmCoordinator(Node):
             return
 
         self.is_paused = False
+        self._check_coverage_events()
 
     # ===== Callbacks: Navigation =====
 
     def _on_waypoint_reached(self, _msg):
         if self.is_paused:
+            return
+
+        if self.current_mode not in ('SEARCHING', 'REFINING', 'ASSISTING'):
             return
 
         self.coverage_waypoints_visited += 1
@@ -219,6 +226,8 @@ class SwarmCoordinator(Node):
     def _on_coverage_update(self, msg):
         for uid, ratio in zip(msg.uav_ids, msg.coverage_ratios):
             self.coverage_map[uid] = ratio
+
+        self._check_coverage_events()
 
     def _on_odom(self, msg):
         x = msg.pose.pose.position.x
@@ -350,7 +359,16 @@ class SwarmCoordinator(Node):
         self._coverage_pub.publish(msg)
 
     def _check_coverage_events(self):
+
+        if len(self.coverage_map) == self.num_uavs and not self._all_done_sent:
+            if all(r >= self.threshold for r in self.coverage_map.values()):
+                self._publish_event('ALL_DRONES_DONE')
+                self._all_done_sent = True
+                return
+
         if self.coverage_waypoints_total == 0:
+            if self.current_mode == 'ASSISTING':
+                self._publish_event('ASSIST_COMPLETE')
             return
 
         coverage = len(self.visited_cells) / self.total_cells if self.total_cells else 0.0
@@ -366,7 +384,9 @@ class SwarmCoordinator(Node):
             return
 
         if self.current_mode == 'SEARCHING':
-            self._publish_event('REGION_COMPLETE', value=coverage)
+            if not self._region_complete_sent:
+                self._publish_event('REGION_COMPLETE', value=coverage)
+                self._region_complete_sent = True
 
         elif self.current_mode == 'REFINING':
             improvement = coverage - self.last_coverage
@@ -396,6 +416,7 @@ class SwarmCoordinator(Node):
     def _reset_coverage(self):
         self.coverage_waypoints_total = 0
         self.coverage_waypoints_visited = 0
+        self._region_complete_sent = False
 
     # ===== Helpers =====
 

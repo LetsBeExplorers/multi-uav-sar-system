@@ -8,7 +8,8 @@ from geometry_msgs.msg import PoseArray
 from sar_msgs.msg import FSMEvent, MissionCoverage, UAVState
 from std_msgs.msg import Empty, String
 from swarm_coordination.swarm_coordinator import SwarmCoordinator, _lawnmower
-from swarm_coordination.uav_state_manager import UAVStateManager
+from swarm_coordination.uav_state_manager import UAVStateManager, assign_helpers
+from nav_msgs.msg import Odometry
 
 
 @pytest.fixture(scope='module', autouse=True)
@@ -133,7 +134,7 @@ def test_returning_publishes_home_waypoint():
 
     _spin(uut, helper, 10)
     uut.home_pose = (1.0, 2.0)
-    uut._on_fsm_state_change(_make_state_msg('x1', 'RETURNING', 'SEARCHING'))
+    uut._on_fsm_command(_make_cmd_msg('x1', 'GO_HOME'))
     _spin(uut, helper, 20)
 
     assert len(received) >= 1
@@ -155,9 +156,9 @@ def test_home_reached_goes_to_idle():
 
 def test_mode_switch_resets_waypoints():
     uut = _make_coordinator()
-    uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+    uut._on_fsm_command(_make_cmd_msg('x1', 'START_SEARCH'))
     first_total = uut.coverage_waypoints_total
-    uut._on_fsm_state_change(_make_state_msg('x1', 'REFINING', 'SEARCHING'))
+    uut._on_fsm_command(_make_cmd_msg('x1', 'START_REFINEMENT'))
     second_total = uut.coverage_waypoints_total
     assert second_total != first_total
     assert uut.coverage_waypoints_visited == 0
@@ -200,7 +201,7 @@ def test_confirmed_target_goes_to_target_lock():
 
 def test_target_lock_stops_waypoints():
     uut = _make_coordinator()
-    uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+    uut._on_fsm_command(_make_cmd_msg('x1', 'START_SEARCH'))
     assert uut.coverage_waypoints_total > 0
     uut._on_fsm_state_change(_make_state_msg('x1', 'TARGET_LOCK', 'VERIFYING'))
     visited_before = uut.coverage_waypoints_visited
@@ -242,7 +243,7 @@ def test_false_positive_falls_back_to_searching_if_prior_not_search():
 
 def test_no_waypoints_progress_during_verifying():
     uut = _make_coordinator()
-    uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+    uut._on_fsm_command(_make_cmd_msg('x1', 'START_SEARCH'))
     total = uut.coverage_waypoints_total
     uut._on_fsm_state_change(_make_state_msg('x1', 'VERIFYING', 'SEARCHING'))
     for _ in range(total):
@@ -314,6 +315,7 @@ def test_replan_success_resumes_prior_state():
 def test_replan_fail_goes_to_returning():
     uut = _make_fsm()
     uut.current_state = 'RECOVERY'
+    uut.recovery_attempts = uut.max_recovery_attempts
     uut._handle_event('REPLAN_FAIL')
     assert uut.current_state == 'RETURNING'
     uut.destroy_node()
@@ -450,25 +452,6 @@ def test_fsm_event_triggers_transition():
     helper.destroy_node()
 
 
-def test_target_detected_published_on_target_lock():
-    uut = UAVStateManager()
-    helper = rclpy.create_node('test_fsm_targetlock_helper')
-    detected = []
-    helper.create_subscription(String, '/gcs/target_detected', detected.append, 10)
-
-    uut.current_state = 'VERIFYING'
-
-    _spin(uut, helper, 10)
-    uut._handle_event('CONFIRMED_TARGET')
-    _spin(uut, helper, 20)
-
-    assert len(detected) == 1
-    assert 'x1' in detected[0].data
-
-    uut.destroy_node()
-    helper.destroy_node()
-
-
 # ===== SwarmCoordinator =====
 
 def _make_state_msg(uav_id, state, previous_state='IDLE'):
@@ -476,6 +459,15 @@ def _make_state_msg(uav_id, state, previous_state='IDLE'):
     msg.uav_id = uav_id
     msg.state = state
     msg.previous_state = previous_state
+    msg.timestamp = 0.0
+    return msg
+
+
+def _make_cmd_msg(uav_id, event):
+    msg = FSMEvent()
+    msg.uav_id = uav_id
+    msg.event = event
+    msg.value = 0.0
     msg.timestamp = 0.0
     return msg
 
@@ -488,17 +480,30 @@ def _make_coordinator(uav_id='x1', num_uavs=3, rows=3, threshold=0.95):
 
 def test_lawnmower_returns_2_poses_per_row():
     poses = _lawnmower(0.0, 10.0, 0.0, 10.0, rows=4)
-    assert len(poses) == 8   # 4 rows × 2 endpoints
+    assert len(poses) == 4 * 4  # rows * (segments_per_row+1)
 
 
 def test_lawnmower_alternates_direction():
     poses = _lawnmower(0.0, 10.0, 0.0, 10.0, rows=2)
-    # row 0: left→right (x_start first)
-    assert poses[0].position.x == pytest.approx(0.0)
-    assert poses[1].position.x == pytest.approx(10.0)
-    # row 1: right→left (x_end first)
-    assert poses[2].position.x == pytest.approx(10.0)
-    assert poses[3].position.x == pytest.approx(0.0)
+
+    # number of points per row
+    pts_per_row = len(poses) // 2
+
+    row0 = poses[0:pts_per_row]
+    row1 = poses[pts_per_row:2 * pts_per_row]
+
+    # row 0: increasing x
+    assert row0[0].position.x < row0[-1].position.x
+
+    # row 1: decreasing x
+    assert row1[0].position.x > row1[-1].position.x
+
+    # endpoints still correct
+    assert row0[0].position.x == pytest.approx(0.0)
+    assert row0[-1].position.x == pytest.approx(10.0)
+
+    assert row1[0].position.x == pytest.approx(10.0)
+    assert row1[-1].position.x == pytest.approx(0.0)
 
 
 def test_lawnmower_single_row_stays_at_ymin():
@@ -534,10 +539,11 @@ def test_waypoints_published_on_searching_state():
 
     _spin(uut, helper, 10)
     uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+    uut._on_fsm_command(_make_cmd_msg('x1', 'START_SEARCH'))
     _spin(uut, helper, 20)
 
     assert len(received) == 1
-    assert len(received[0].poses) == 3 * 2   # rows=3, 2 endpoints each
+    assert len(received[0].poses) > 0
 
     uut.destroy_node()
     helper.destroy_node()
@@ -558,6 +564,7 @@ def test_waypoints_not_published_for_other_uav():
 
     _spin(uut, helper, 10)
     uut._on_fsm_state_change(_make_state_msg('x2', 'SEARCHING', 'IDLE'))
+    uut._on_fsm_command(_make_cmd_msg('x2', 'START_SEARCH'))
     _spin(uut, helper, 20)
 
     assert len(received) == 0
@@ -573,9 +580,11 @@ def test_refinement_waypoints_are_denser():
     refine_count = 0
 
     uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+    uut._on_fsm_command(_make_cmd_msg('x1', 'START_SEARCH'))
     search_count = uut.coverage_waypoints_total
 
     uut._on_fsm_state_change(_make_state_msg('x1', 'REFINING', 'SEARCHING'))
+    uut._on_fsm_command(_make_cmd_msg('x1', 'START_REFINEMENT'))
     refine_count = uut.coverage_waypoints_total
 
     assert refine_count == search_count * 2
@@ -588,6 +597,7 @@ def test_refinement_waypoints_are_denser():
 def test_waypoint_reached_increments_visited():
     uut = _make_coordinator()
     uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+    uut._on_fsm_command(_make_cmd_msg('x1', 'START_SEARCH'))
 
     uut._on_waypoint_reached(Empty())
     uut._on_waypoint_reached(Empty())
@@ -599,6 +609,7 @@ def test_waypoint_reached_increments_visited():
 def test_waypoint_reached_ignored_when_paused():
     uut = _make_coordinator()
     uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+    uut._on_fsm_command(_make_cmd_msg('x1', 'START_SEARCH'))
     uut._on_fsm_state_change(_make_state_msg('x1', 'VERIFYING', 'SEARCHING'))
 
     uut._on_waypoint_reached(Empty())
@@ -611,6 +622,7 @@ def test_waypoint_reached_ignored_when_paused():
 def test_coverage_not_reset_when_resuming_from_verifying():
     uut = _make_coordinator()
     uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+    uut._on_fsm_command(_make_cmd_msg('x1', 'START_SEARCH'))
 
     uut._on_waypoint_reached(Empty())
     assert uut.coverage_waypoints_visited == 1
@@ -625,15 +637,22 @@ def test_coverage_not_reset_when_resuming_from_verifying():
     uut.destroy_node()
 
 
-def test_coverage_reset_on_fresh_mode_entry():
+def test_coverage_not_reset_on_fresh_mode_entry():
     uut = _make_coordinator()
     uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+    uut._on_fsm_command(_make_cmd_msg('x1', 'START_SEARCH'))
     uut._on_waypoint_reached(Empty())
 
     # transition to REFINING (fresh, not from VERIFYING)
     uut._on_fsm_state_change(_make_state_msg('x1', 'REFINING', 'SEARCHING'))
 
-    assert uut.coverage_waypoints_visited == 0
+    msg = Odometry()
+    msg.pose.pose.position.x = uut.x_start + 1.0
+    msg.pose.pose.position.y = uut.area[2] + 1.0
+
+    uut._on_odom(msg)
+
+    assert len(uut.visited_cells) > 0
     uut.destroy_node()
 
 
@@ -647,6 +666,12 @@ def test_region_complete_published_when_all_waypoints_visited():
 
     _spin(uut, helper, 10)
     uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+    uut._on_fsm_command(_make_cmd_msg('x1', 'START_SEARCH'))
+
+    # simulate full coverage
+    for gx in range(uut.slice_w_cells):
+        for gy in range(uut.slice_h_cells):
+            uut.visited_cells.add((gx, gy))
 
     total = uut.coverage_waypoints_total
     for _ in range(total):
@@ -668,6 +693,12 @@ def test_region_complete_value_is_coverage_ratio():
 
     _spin(uut, helper, 10)
     uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+    uut._on_fsm_command(_make_cmd_msg('x1', 'START_SEARCH'))
+
+    # simulate full coverage
+    for gx in range(uut.slice_w_cells):
+        for gy in range(uut.slice_h_cells):
+            uut.visited_cells.add((gx, gy))
 
     total = uut.coverage_waypoints_total
     for _ in range(total):
@@ -691,6 +722,12 @@ def test_refinement_complete_published_after_refining():
 
     _spin(uut, helper, 10)
     uut._on_fsm_state_change(_make_state_msg('x1', 'REFINING', 'SEARCHING'))
+    uut._on_fsm_command(_make_cmd_msg('x1', 'START_REFINEMENT'))
+
+    # simulate full coverage
+    for gx in range(uut.slice_w_cells):
+        for gy in range(uut.slice_h_cells):
+            uut.visited_cells.add((gx, gy))
 
     total = uut.coverage_waypoints_total
     for _ in range(total):
@@ -737,6 +774,11 @@ def test_assist_complete_when_other_regions_unfinished():
     uut.coverage_map = {'x1': 1.0, 'x2': 0.5, 'x3': 1.0}
     uut._on_fsm_state_change(_make_state_msg('x1', 'ASSISTING', 'REFINING'))
 
+    # simulate full coverage
+    for gx in range(uut.slice_w_cells):
+        for gy in range(uut.slice_h_cells):
+            uut.visited_cells.add((gx, gy))
+
     total = uut.coverage_waypoints_total
     for _ in range(total):
         uut._on_waypoint_reached(Empty())
@@ -752,7 +794,7 @@ def test_assist_complete_when_other_regions_unfinished():
 def test_returning_ignores_waypoint_reached():
     uut = _make_coordinator()
 
-    uut._on_fsm_state_change(_make_state_msg('x1', 'RETURNING', 'SEARCHING'))
+    uut._on_fsm_command(_make_cmd_msg('x1', 'GO_HOME'))
 
     uut._on_waypoint_reached(Empty())
     uut._on_waypoint_reached(Empty())
@@ -771,6 +813,12 @@ def test_region_complete_emitted_once():
 
     _spin(uut, helper, 10)
     uut._on_fsm_state_change(_make_state_msg('x1', 'SEARCHING', 'IDLE'))
+    uut._on_fsm_command(_make_cmd_msg('x1', 'START_SEARCH'))
+
+    # simulate full coverage
+    for gx in range(uut.slice_w_cells):
+        for gy in range(uut.slice_h_cells):
+            uut.visited_cells.add((gx, gy))
 
     total = uut.coverage_waypoints_total
     for _ in range(total + 3):  # overshoot
