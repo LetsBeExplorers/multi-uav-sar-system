@@ -127,7 +127,8 @@ class UAVStateManager(Node):
 
         # ── Tier 3: Mission commands ───────────────────────────────────────
         if event == 'MISSION_STOP':
-            self._transition('RETURNING')
+            if self.current_state != 'TARGET_LOCK':
+                self._transition('RETURNING')
             return
         if event == 'MISSION_UPDATE':
             self._transition('SEARCHING')
