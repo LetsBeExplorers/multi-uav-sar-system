@@ -5,7 +5,7 @@ from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry
 import rclpy
 from rclpy.node import Node
-from sar_msgs.msg import DriverHealth, FSMEvent, Alert
+from sar_msgs.msg import DriverHealth, UAVState, Alert, FSMEvent
 
 
 class PlatformInterface(Node):
@@ -49,7 +49,7 @@ class PlatformInterface(Node):
         self.create_subscription(DriverHealth, f'/{self.uav_id}/driver/health', self._on_health, 10)
         self.create_subscription(LaserScan, f'/{self.uav_id}/scan', self._on_scan, 10)
         self.create_subscription(Odometry, f'/{self.uav_id}/state/odom', self._on_odom, 10)
-        self.create_subscription(FSMEvent, f'/{self.uav_id}/fsm/state', self._on_state, 10)
+        self.create_subscription(UAVState, '/uav/state', self._on_state, 10)
 
 
     # ===== Command Handling =====
@@ -128,7 +128,9 @@ class PlatformInterface(Node):
     # ===== FSM State =====
 
     def _on_state(self, msg):
-        self.current_mode = msg.event
+        if msg.uav_id != self.uav_id:
+            return
+        self.current_mode = msg.state
 
 
     # ===== Helpers =====
