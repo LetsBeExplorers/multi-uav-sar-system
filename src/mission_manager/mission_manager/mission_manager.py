@@ -43,8 +43,8 @@ class MissionManager(Node):
         # ===== Publishers =====
         self._start_pub = self.create_publisher(Empty, '/mission/start', 10)
         self._stop_pub = self.create_publisher(Empty, '/mission/stop', 10)
-        self._halt_pub = self.create_publisher(Empty, '/mission/halt', 10)
-        self._force_return_pub = self.create_publisher(Empty, '/mission/force_return', 10)
+        self._end_pub = self.create_publisher(Empty, '/mission/end', 10)
+        self._complete_pub = self.create_publisher(Empty, '/mission/complete', 10)
         self._coverage_pub = self.create_publisher(MissionCoverage, '/mission/coverage', 10)
 
         # ===== Subscribers =====
@@ -163,8 +163,8 @@ class MissionManager(Node):
             return
 
         self.mission_state = 'COMPLETE'
-        self._wait_for_subscribers(self._stop_pub)
-        self._stop_pub.publish(Empty())
+        self._wait_for_subscribers(self._complete_pub)
+        self._complete_pub.publish(Empty())
 
 
     # ===== Logging =====
@@ -239,25 +239,23 @@ class MissionManager(Node):
         self._reset_uav_state()
         self._start_pub.publish(Empty())
 
+    def send_end(self):
+        if self.mission_state == 'IDLE':
+            print('Mission not running')
+            return
+
+        self._wait_for_subscribers(self._end_pub)
+        self.mission_state = 'ENDED'
+        self._end_pub.publish(Empty())
+
     def send_stop(self):
         if self.mission_state == 'IDLE':
             print('Mission not running')
             return
 
-        self._wait_for_subscribers(self._force_return_pub)
+        self._wait_for_subscribers(self._stop_pub)
         self.mission_state = 'STOPPED'
-        self._force_return_pub.publish(Empty())
-        self.get_logger().debug('FORCE_RETURN sent')
-
-    def send_halt(self):
-        if self.mission_state == 'IDLE':
-            print('Mission not running')
-            return
-
-        self._wait_for_subscribers(self._halt_pub)
-        self.mission_state = 'HALTED'
-        self._halt_pub.publish(Empty())
-        self.get_logger().debug('HALT sent')
+        self._stop_pub.publish(Empty())
 
     def _wait_for_subscribers(self, pub, timeout=5.0):
         if self.is_test:
@@ -311,9 +309,9 @@ def main(args=None):
 
                 node.send_start(target_goal)
             elif cmd == 'end':
-                node.send_stop()
+                node.send_end()
             elif cmd == 'stop':
-                node.send_halt()
+                node.send_stop()
             elif cmd == 'exit':
                 break
             else:
