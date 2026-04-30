@@ -132,9 +132,9 @@ class MissionManager(Node):
         t = msg.timestamp
         new_target = (msg.x, msg.y, t)
 
-        # prevent duplicates
+        EPS = 0.01
         for (x, y, *_ ) in self.confirmed_targets:
-            if abs(x - new_target[0]) < 1.0 and abs(y - new_target[1]) < 1.0:
+            if abs(x - new_target[0]) < EPS and abs(y - new_target[1]) < EPS:
                 return
 
         dt = t - self.mission_start_time

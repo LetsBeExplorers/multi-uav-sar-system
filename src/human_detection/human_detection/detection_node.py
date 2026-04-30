@@ -34,6 +34,7 @@ class DetectionNode(Node):
         self.detection_active = False
         self.current_position = None
         self.targets = []
+        self.confirmed_targets = []
 
         # ===== Publishers =====
         self._detection_pub = self.create_publisher(DetectionEvent, f'/{self.uav_id}/detection/event', 10)
@@ -45,6 +46,7 @@ class DetectionNode(Node):
         self.create_subscription(Empty, '/mission/stop', self._on_stop, 10)
         self.create_subscription(Odometry, f'/{self.uav_id}/state/odom', self._on_odom, 10)
         self.create_subscription(DetectionEvent, '/mission/targets', self._on_target, 10) # temporary
+        self.create_subscription(DetectionEvent, '/targets/confirmed', self._on_target_confirmed, 10)
 
         # ===== Timers =====
         self.create_timer(1.0 / rate, self._tick)
@@ -104,6 +106,7 @@ class DetectionNode(Node):
         self.consecutive_detections = 0
         self.detection_active = False
         self.targets = []
+        self.confirmed_targets = []
 
     def _on_odom(self, msg):
         self.current_position = (
@@ -113,6 +116,9 @@ class DetectionNode(Node):
 
     def _on_target(self, msg):
         self.targets.append((msg.x, msg.y))
+
+    def _on_target_confirmed(self, msg):
+        self.confirmed_targets.append((msg.x, msg.y))
 
     # ===== Detection Logic =====
 
@@ -140,8 +146,19 @@ class DetectionNode(Node):
             dist = (dx * dx + dy * dy) ** 0.5
 
             if dist < self.detection_range:
+                # Skip targets already confirmed by any UAV — no point
+                # re-detecting and re-verifying a known body.
+                if self._is_already_confirmed(tx, ty):
+                    continue
                 return True
 
+        return False
+
+    def _is_already_confirmed(self, tx, ty):
+        EPS = 0.01
+        for (cx, cy) in self.confirmed_targets:
+            if abs(cx - tx) < EPS and abs(cy - ty) < EPS:
+                return True
         return False
 
     # ===== Publishers =====
@@ -162,6 +179,8 @@ class DetectionNode(Node):
             dist = (dx*dx + dy*dy) ** 0.5
 
             if dist < self.detection_range:
+                if self._is_already_confirmed(tx, ty):
+                    continue
                 msg.x = tx
                 msg.y = ty
                 msg.confidence = random.uniform(0.8, 1.0)
