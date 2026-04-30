@@ -33,7 +33,12 @@ def detection_node():
     node._alert_published = []
     # Pre-arm mission so _tick runs without needing /mission/start.
     node.mission_active = True
-    node.start_time = node.get_clock().now().nanoseconds / 1e9 - 100.0  # past warmup
+    # _tick now requires a known pose; supply one far from any real target so
+    # near_real stays False and tests of fake-detection paths still work.
+    node.current_position = (1000.0, 1000.0)
+    # Tick now also gates on FSM state. Pretend we're searching so the test
+    # harness can drive _tick directly.
+    node.fsm_state = 'SEARCHING'
     yield node
     node.destroy_node()
 
@@ -75,19 +80,6 @@ def test_detection_requires_persistence(detection_node, monkeypatch):
     assert detection_node._fsm_published[0].event == 'DETECTION_EVENT'
     # Confidence is now exposed on the FSM event.
     assert detection_node._fsm_published[0].value == pytest.approx(0.9)
-
-
-def test_detection_suppressed_during_warmup(detection_node, monkeypatch):
-    # Reset start_time to "now" so we're inside the warmup window.
-    detection_node.start_time = detection_node.get_clock().now().nanoseconds / 1e9
-    monkeypatch.setattr(detection_mod.random, 'random', lambda: 0.0)
-    monkeypatch.setattr(detection_mod.random, 'uniform', lambda a, b: 0.9)
-
-    for _ in range(10):
-        detection_node._tick()
-
-    assert detection_node._fsm_published == []
-    assert detection_node.consecutive_detections == 0
 
 
 def test_detection_suppressed_when_mission_inactive(detection_node, monkeypatch):
