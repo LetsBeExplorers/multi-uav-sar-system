@@ -47,8 +47,7 @@ class WorldModelNode(Node):
         self.dynamic_cells = {}   # uav_id -> set of (gx, gy) cells
         self.own_pose = None
         self.collision_count = 0
-        self.last_static_collision_time = self.get_clock().now()
-        self.last_dynamic_collision_time = self.get_clock().now()
+        self.last_collision_time = self.get_clock().now()
         self.collision_cooldown = 1.0
 
         # ===== Static Obstacles =====
@@ -85,13 +84,19 @@ class WorldModelNode(Node):
             10
         )
 
+        def make_callback(uid):
+            def callback(msg):
+                self._on_dynamic_obstacle_update(uid, msg)
+            return callback
+
         all_uavs = [f'x{i + 1}' for i in range(self.num_uavs)]
+
         for other_id in all_uavs:
             if other_id != self.uav_id:
                 self.create_subscription(
                     Odometry,
                     f'/{other_id}/state/odom',
-                    lambda msg, uid=other_id: self._on_dynamic_obstacle_update(uid, msg),
+                    make_callback(other_id),
                     10
                 )
 
@@ -103,7 +108,7 @@ class WorldModelNode(Node):
         )
 
         # ===== Grid Publisher Timer =====
-        self.create_timer(0.2, self._publish_grid)
+        self.create_timer(0.1, self._publish_grid)
 
     # ===== Grid Management =====
 
@@ -185,6 +190,27 @@ class WorldModelNode(Node):
         if self.own_pose is None:
             return
 
+        # collision detection
+        valid = [r for r in msg.ranges if msg.range_min < r < msg.range_max]
+
+        if valid:
+            min_dist = min(valid)
+
+            # VERY CLOSE → likely physical contact
+            if min_dist < 0.2:   # <-- tune this if needed
+                now = self.get_clock().now()
+                dt = (now - self.last_collision_time).nanoseconds / 1e9
+
+                if dt > self.collision_cooldown:
+                    self.last_collision_time = now
+
+                    event = FSMEvent()
+                    event.uav_id = self.uav_id
+                    event.timestamp = now.nanoseconds / 1e9
+                    event.event = 'HARD_COLLISION'
+
+                    self._event_pub.publish(event)
+
         sx, sy, yaw = self.own_pose
 
         for i, r in enumerate(msg.ranges):
@@ -240,21 +266,6 @@ class WorldModelNode(Node):
 
         gx, gy = self.world_to_grid(x, y)
 
-        if self._in_bounds(gx, gy):
-            now = self.get_clock().now()
-            dt = (now - self.last_static_collision_time).nanoseconds / 1e9
-
-            if self.static_grid[gy][gx] == 1 and dt > self.collision_cooldown:
-                self.collision_count += 1
-                self.last_static_collision_time = now
-
-                event = FSMEvent()
-                event.uav_id = self.uav_id
-                event.event = 'HARD_COLLISION'
-                event.timestamp = self.get_clock().now().nanoseconds / 1e9
-
-                self._event_pub.publish(event)
-
         self.own_pose = (x, y, yaw)
 
     def _on_dynamic_obstacle_update(self, uav_id, msg):
@@ -272,26 +283,7 @@ class WorldModelNode(Node):
         self.dynamic_cells[uav_id] = cells
         self.dynamic_obstacles[uav_id] = (x, y)
 
-        # collision check
-        if self.own_pose is not None:
-            ox, oy, _ = self.own_pose
-            now = self.get_clock().now()
-            dt = (now - self.last_dynamic_collision_time).nanoseconds / 1e9
-            own_gx, own_gy = self.world_to_grid(ox, oy)
-
-            for cells in self.dynamic_cells.values():
-                if (own_gx, own_gy) in cells:
-                    if dt > self.collision_cooldown:
-                        self.collision_count += 1
-                        self.last_dynamic_collision_time = now
-
-                        event = FSMEvent()
-                        event.uav_id = self.uav_id
-                        event.timestamp = now.nanoseconds / 1e9
-                        event.event = 'HARD_COLLISION'
-
-                        self._event_pub.publish(event)
-                    break
+        self._publish_grid()
 
     # ===== Grid Publisher =====
 
