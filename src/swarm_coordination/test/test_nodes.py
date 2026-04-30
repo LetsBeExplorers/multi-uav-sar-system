@@ -45,27 +45,16 @@ def test_mission_start_from_idle():
     uut.destroy_node()
 
 
-def test_region_complete_below_threshold_goes_to_refining():
+def test_region_complete_always_goes_to_refining():
     uut = _make_fsm()
     uut.current_state = 'SEARCHING'
-    uut._handle_event('REGION_COMPLETE', value=0.80)
-    assert uut.current_state == 'REFINING'
-    uut.destroy_node()
 
+    # test multiple values to prove threshold doesn't matter
+    for value in [0.5, 0.8, 0.95, 1.0]:
+        uut._handle_event('REGION_COMPLETE', value=value)
+        assert uut.current_state == 'REFINING'
+        uut.current_state = 'SEARCHING'  # reset for next iteration
 
-def test_region_complete_at_threshold_goes_to_assisting():
-    uut = _make_fsm()
-    uut.current_state = 'SEARCHING'
-    uut._handle_event('REGION_COMPLETE', value=0.95)
-    assert uut.current_state == 'ASSISTING'
-    uut.destroy_node()
-
-
-def test_region_complete_above_threshold_goes_to_assisting():
-    uut = _make_fsm()
-    uut.current_state = 'SEARCHING'
-    uut._handle_event('REGION_COMPLETE', value=1.0)
-    assert uut.current_state == 'ASSISTING'
     uut.destroy_node()
 
 
