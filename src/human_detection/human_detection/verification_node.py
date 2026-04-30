@@ -15,14 +15,12 @@ class VerificationNode(Node):
             ('uav_id', 'x1'),
             ('verify_delay_min', 2.0),
             ('verify_delay_max', 5.0),
-            ('verify_confirm_probability', 0.7),
             ('verify_timeout', 10.0),
         ])
 
         self.uav_id = self.get_parameter('uav_id').value
         self.delay_min = self.get_parameter('verify_delay_min').value
         self.delay_max = self.get_parameter('verify_delay_max').value
-        self.confirm_prob = self.get_parameter('verify_confirm_probability').value
         self.verify_timeout = self.get_parameter('verify_timeout').value
 
         # ===== State =====

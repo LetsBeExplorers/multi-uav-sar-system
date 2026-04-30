@@ -157,7 +157,6 @@ def generate_launch_description():
                 'uav_id': uav,
                 'verify_delay_min': cfg['verify_delay_min'],
                 'verify_delay_max': cfg['verify_delay_max'],
-                'verify_confirm_probability': cfg['verify_confirm_probability'],
             }]
         ))
 

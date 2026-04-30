@@ -30,4 +30,3 @@ fake_detection_probability: 0.15
 # Verification params
 verify_delay_min: 2.0
 verify_delay_max: 5.0
-verify_confirm_probability: 0.7
