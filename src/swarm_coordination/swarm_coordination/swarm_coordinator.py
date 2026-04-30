@@ -292,10 +292,10 @@ class SwarmCoordinator(Node):
         if len(gap_rows) > self.rows * 2:
             gap_rows = gap_rows[::2]  # take every other row
 
-            width = self.x_end - self.x_start
-            spacing = 2 * self.coverage_radius * 0.8
-            segments = max(2, int(width / spacing))
-            
+        width = self.x_end - self.x_start
+        spacing = 2 * self.coverage_radius * 0.8
+        segments = max(2, int(width / spacing))
+
         for gy in gap_rows:
             y = self.area[2] + (gy + 0.5) * self.resolution
 
