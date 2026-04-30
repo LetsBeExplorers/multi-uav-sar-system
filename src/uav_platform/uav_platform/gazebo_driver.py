@@ -11,17 +11,17 @@ class GazeboDriver(Node):
         super().__init__('gazebo_driver')
 
         # ===== Parameters =====
-        self.declare_parameter('uav_name', 'x1')
-        uav = self.get_parameter('uav_name').value
+        self.declare_parameter('uav_id', 'x1')
+        self.uav_id = self.get_parameter('uav_id').value
 
         # ===== Publishers =====
-        self._cmd_pub = self.create_publisher(Twist, f'/model/{uav}/cmd_vel', 10)
-        self._pose_pub = self.create_publisher(Odometry, f'/{uav}/state/odom', 10)
-        self._health_pub = self.create_publisher(DriverHealth, f'/{uav}/driver/health', 10)
+        self._cmd_pub = self.create_publisher(Twist, f'/model/{self.uav_id}/cmd_vel', 10)
+        self._pose_pub = self.create_publisher(Odometry, f'/{self.uav_id}/state/odom', 10)
+        self._health_pub = self.create_publisher(DriverHealth, f'/{self.uav_id}/driver/health', 10)
 
         # ===== Subscribers =====
-        self.create_subscription(Twist, f'/{uav}/driver/cmd_vel', self._forward_command, 10)
-        self.create_subscription(Odometry, f'/model/{uav}/odometry', self._forward_state, 10)
+        self.create_subscription(Twist, f'/{self.uav_id}/driver/cmd_vel', self._forward_command, 10)
+        self.create_subscription(Odometry, f'/model/{self.uav_id}/odometry', self._forward_state, 10)
 
     # ===== Command Passthrough =====
 
@@ -39,8 +39,9 @@ class GazeboDriver(Node):
     # ===== Health Reporting =====
 
     def _publish_health(self):
-        # Battery and status are stubbed in sim — real values come from Tello SDK on hardware
+        # Battery and status are stubbed in sim
         health = DriverHealth()
+        health.uav_id = self.uav_id
         health.status = 'OK'
         health.battery = 100.0
         health.timestamp = self.get_clock().now().nanoseconds / 1e9
