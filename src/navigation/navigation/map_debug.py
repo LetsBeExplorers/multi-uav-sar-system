@@ -229,8 +229,6 @@ class MapViewer(Node):
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
         path = os.path.join(out_dir, f'final_map_{ts}.png')
         self.fig.savefig(path, dpi=150, bbox_inches='tight')
-        self.get_logger().info(f'final map saved to {path}')
-
 
 def main():
     rclpy.init()
