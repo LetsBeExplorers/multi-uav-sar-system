@@ -270,9 +270,6 @@ class SwarmCoordinator(Node):
             self.rows
         )
         self._send_waypoints(poses, mode="SEARCH")
-        self._publish_status(
-            f'[{self.uav_id}] AREA x:[{self.x_start:.1f},{self.x_end:.1f}] rows:{self.rows}'
-        )
 
     def _publish_refinement_waypoints(self):
         # start from the top-right where SEARCHING ended, snake back down
@@ -307,7 +304,6 @@ class SwarmCoordinator(Node):
             self.rows * 2 - 1,
         )
         self._send_waypoints(poses, mode="ASSIST", x_start=tx_start, x_end=tx_end)
-        self._publish_status(f'[{self.uav_id}] ASSISTING → {target_id}')
 
     def _publish_return_home_waypoints(self):
         pose = Pose()
@@ -320,8 +316,6 @@ class SwarmCoordinator(Node):
         pose.orientation.w = 1.0
         self._send_waypoints([])  # clear current path
         self._send_waypoints([pose], mode="GO_HOME")
-
-        self._publish_status(f'[{self.uav_id}] RETURNING HOME')
 
     def _send_waypoints(self, poses, mode="NORMAL", x_start=None, x_end=None):
         msg = PoseArray()

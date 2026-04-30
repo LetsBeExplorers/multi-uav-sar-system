@@ -107,14 +107,18 @@ class AStarNavigationNode(Node):
             return
 
         # get region bounds
-        mode, bounds = msg.header.frame_id.split('|')
-        xmin, xmax = bounds.split(',')
+        if '|' in msg.header.frame_id:
+            mode, bounds = msg.header.frame_id.split('|')
+            xmin, xmax = bounds.split(',')
 
-        self.x_min = float(xmin)
-        self.x_max = float(xmax)
+            self.x_min = float(xmin)
+            self.x_max = float(xmax)
+            self.mode = mode
+        else:
+            self.mode = "NORMAL"
+
+        # reset when new waypoints arrive
         self.in_region = False
-
-        self.mode = mode
         self.waypoints = [(p.position.x, p.position.y) for p in msg.poses]
         self.waypoint_index = 0
         self.current_path = None

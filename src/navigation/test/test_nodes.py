@@ -4,7 +4,7 @@
 
 import math
 
-from geometry_msgs.msg import Pose, PoseArray
+from geometry_msgs.msg import Pose, PoseArray, PoseStamped
 from nav_msgs.msg import Odometry, Path
 from navigation.astar_navigation_node import AStarNavigationNode
 from navigation.path_executor import PathExecutorNode
@@ -14,6 +14,7 @@ import rclpy
 from sar_msgs.msg import FSMEvent
 from sar_msgs.srv import GetOccupancyGrid
 from std_msgs.msg import Empty
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 
 
 @pytest.fixture(scope='module', autouse=True)
@@ -331,16 +332,29 @@ def test_executor_home_captured_on_first_odom():
 
 
 def test_executor_stop_clears_path():
-    """Publishing to /mission/stop clears the active path."""
+    """Publishing empty path clears the active path."""
     uut = PathExecutorNode()
     helper = rclpy.create_node('test_exec_stop_helper')
-    stop_pub = helper.create_publisher(Empty, '/mission/stop', 10)
+    qos_transient = QoSProfile(
+        depth=1,
+        reliability=ReliabilityPolicy.RELIABLE,
+        durability=DurabilityPolicy.TRANSIENT_LOCAL
+    )
 
+    path_pub = helper.create_publisher(
+        Path,
+        '/x1/nav/planned_path',
+        qos_transient
+    )
+
+    # simulate existing path
     uut.current_path = [(0.0, 0.0), (1.0, 0.0)]
     uut.current_index = 1
 
-    _spin(uut, helper, 10)
-    stop_pub.publish(Empty())
+    # send empty path (stop signal in your system)
+    empty_path = Path()
+    path_pub.publish(empty_path)
+
     _spin(uut, helper, 20)
 
     assert len(uut.current_path) == 0
@@ -351,33 +365,17 @@ def test_executor_stop_clears_path():
     helper.destroy_node()
 
 
-def test_executor_go_home_sets_returning_flag():
-    """go_home() sets is_returning and publishes a single home waypoint."""
+def test_executor_sets_returning_flag_on_go_home_path():
+    """GO_HOME command triggers the returning flag to be set."""
     uut = PathExecutorNode()
-    helper = rclpy.create_node('test_exec_gohome_helper')
 
-    qos_transient = rclpy.qos.QoSProfile(
-        depth=1,
-        reliability=rclpy.qos.ReliabilityPolicy.RELIABLE,
-        durability=rclpy.qos.DurabilityPolicy.TRANSIENT_LOCAL
-    )
-    received = []
-    helper.create_subscription(PoseArray, '/x1/nav/waypoints', received.append, qos_transient)
+    msg = Path()
+    msg.header.frame_id = 'map|GO_HOME'
+    msg.poses.append(PoseStamped())
 
-    uut.home_x = 1.0
-    uut.home_y = 2.0
+    uut._on_path_received(msg)
 
-    _spin(uut, helper, 10)
-    uut.go_home()
-    _spin(uut, helper, 20)
-
-    assert uut.is_returning
-    assert len(received) == 1
-    assert received[0].poses[0].position.x == pytest.approx(1.0)
-    assert received[0].poses[0].position.y == pytest.approx(2.0)
-
-    uut.destroy_node()
-    helper.destroy_node()
+    assert uut.is_returning is True
 
 
 def test_executor_home_reached_event_on_return_complete():

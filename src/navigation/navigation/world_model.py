@@ -41,7 +41,6 @@ class WorldModelNode(Node):
         self.collision_threshold = self.get_parameter('collision_threshold').value
 
         # ===== State =====
-        # -1 = unknown, 0 = free, 1 = occupied
         self.grid = [[-1] * self.grid_width for _ in range(self.grid_height)]
         self.static_grid = [[0] * self.grid_width for _ in range(self.grid_height)]
         self.dynamic_obstacles = {}
@@ -300,14 +299,25 @@ class WorldModelNode(Node):
 
     def _get_occupancy_grid(self, request, response):
         flat = []
-        for row in self.grid:
-            flat.extend(row)
+
+        dynamic = set()
+        for cells in self.dynamic_cells.values():
+            dynamic.update(cells)
+
+        for gy, row in enumerate(self.grid):
+            for gx, val in enumerate(row):
+                if (gx, gy) in dynamic:
+                    flat.append(1)
+                else:
+                    flat.append(val)
+
         response.grid = flat
         response.width = self.grid_width
         response.height = self.grid_height
         response.resolution = float(self.resolution)
         response.origin_x = float(self.origin_x)
         response.origin_y = float(self.origin_y)
+
         return response
 
 
