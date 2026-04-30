@@ -31,10 +31,12 @@ class DetectionNode(Node):
         # ===== State =====
         self.consecutive_detections = 0
         self.mission_active = False
-        self.start_time = None  # set by _on_start; None == no mission yet
+        self.start_time = None
         self.warmup_duration = 5.0  # seconds
         self.detection_active = False
         self.current_position = None
+        self.takeoff_altitude = 0.5  # min z before we consider the UAV airborne
+        self.current_altitude = 0.0
         self.targets = []
 
         # ===== Publishers =====
@@ -55,6 +57,10 @@ class DetectionNode(Node):
 
     def _tick(self):
         if not self.mission_active or self.start_time is None:
+            return
+
+        # No pose yet — skip rather than firing fakes blindly.
+        if self.current_position is None:
             return
 
         now = self.get_clock().now().nanoseconds / 1e9
@@ -98,7 +104,7 @@ class DetectionNode(Node):
 
     def _on_start(self, _msg):
         self.mission_active = True
-        self.start_time = self.get_clock().now().nanoseconds / 1e9
+        self.start_time = None
         self.consecutive_detections = 0
         self.detection_active = False
 
@@ -113,6 +119,15 @@ class DetectionNode(Node):
             msg.pose.pose.position.x,
             msg.pose.pose.position.y
         )
+        self.current_altitude = msg.pose.pose.position.z
+
+        # arm the warmup clock the first time we see the UAV airborne
+        if (
+            self.mission_active
+            and self.start_time is None
+            and self.current_altitude >= self.takeoff_altitude
+        ):
+            self.start_time = self.get_clock().now().nanoseconds / 1e9
 
     def _on_target(self, msg):
         self.targets.append((msg.x, msg.y))
