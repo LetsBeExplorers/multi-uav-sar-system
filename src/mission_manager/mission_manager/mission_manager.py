@@ -55,13 +55,6 @@ class MissionManager(Node):
         self.create_subscription(UAVCoverage, '/uav/coverage', self._on_coverage_msg, 10)
         self.create_subscription(Alert, '/alerts', self._on_alert, 10)
         self.create_subscription(DetectionEvent, '/targets/confirmed', self._on_target_confirmed, 10)
-        for uid in self.uav_ids:
-            self.create_subscription(
-                DetectionEvent,
-                f'/{uid}/detection/event',
-                self._on_detection,
-                10
-            )
 
         # ===== Mission timing =====
         self.mission_start_time = None
