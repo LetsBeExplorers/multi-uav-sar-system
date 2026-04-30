@@ -59,7 +59,7 @@ def generate_launch_description():
             package='uav_platform',
             executable='platform_interface',
             name='platform_interface_' + uav,
-            parameters=[{'uav_name': uav}]
+            parameters=[{'uav_id': uav}]
         ))
 
         # Gazebo driver
@@ -67,7 +67,7 @@ def generate_launch_description():
             package='uav_platform',
             executable='gazebo_driver',
             name='gazebo_driver_' + uav,
-            parameters=[{'uav_name': uav}]
+            parameters=[{'uav_id': uav}]
         ))
 
         # World model
