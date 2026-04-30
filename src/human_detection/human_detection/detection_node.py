@@ -3,7 +3,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Empty
 from nav_msgs.msg import Odometry
-from sar_msgs.msg import DetectionEvent, FSMEvent, Alert
+from sar_msgs.msg import DetectionEvent, FSMEvent, Alert, UAVState
 
 
 class DetectionNode(Node):
@@ -49,6 +49,7 @@ class DetectionNode(Node):
         self.create_subscription(Empty, '/mission/stop', self._on_stop, 10)
         self.create_subscription(Odometry, f'/{self.uav_id}/state/odom', self._on_odom, 10)
         self.create_subscription(DetectionEvent, '/mission/targets', self._on_target, 10) # temporary
+        self.create_subscription(UAVState, '/uav/state', self._on_uav_state, 10)
 
         # ===== Timers =====
         self.create_timer(1.0 / rate, self._tick)
@@ -119,13 +120,16 @@ class DetectionNode(Node):
             msg.pose.pose.position.x,
             msg.pose.pose.position.y
         )
-        self.current_altitude = msg.pose.pose.position.z
 
-        # arm the warmup clock the first time we see the UAV airborne
+    def _on_uav_state(self, msg):
+        # Filter to this UAV; UAVState is published on a shared topic.
+        if msg.uav_id != self.uav_id:
+            return
+
         if (
             self.mission_active
             and self.start_time is None
-            and self.current_altitude >= self.takeoff_altitude
+            and msg.state in ('SEARCHING', 'REFINING', 'ASSISTING')
         ):
             self.start_time = self.get_clock().now().nanoseconds / 1e9
 
