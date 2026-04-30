@@ -113,12 +113,7 @@ class UAVStateManager(Node):
     # ===== Core FSM =====
 
     def _handle_event(self, event: str, value: float = 0.0):
-
-        # ── Tier 0: Operator override (absolute priority) ──
-        if event == 'FORCE_RETURN':
-            self._transition('RETURNING')
-            return
-
+        
         # ── Tier 1: Emergency (any state) ──────────────────────────────────
         if event in ('CRITICAL_FAILURE', 'HARD_COLLISION'):
             self._transition('EMERGENCY_STOP')
