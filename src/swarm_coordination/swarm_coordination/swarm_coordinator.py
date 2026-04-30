@@ -108,11 +108,9 @@ class SwarmCoordinator(Node):
         )
 
         # ===== Publishers =====
-        self._waypoint_pub = self.create_publisher(
-            PoseArray, f'/{self.uav_id}/nav/waypoints', qos_transient)
-        self._event_pub = self.create_publisher(
-            FSMEvent, f'/{self.uav_id}/fsm/event', 10)
-        self._status_pub = self.create_publisher(String, '/mission/status', 10)
+        self._waypoint_pub = self.create_publisher(PoseArray, f'/{self.uav_id}/nav/waypoints', qos_transient)
+        self._event_pub = self.create_publisher(FSMEvent, f'/{self.uav_id}/fsm/event', 10)
+        self._coverage_pub = self.create_publisher(UAVCoverage, '/uav/coverage', 10)
 
         # ===== Subscribers =====
         self.create_subscription(
@@ -134,34 +132,10 @@ class SwarmCoordinator(Node):
 
         # ===== Timers =====
         # 5Hz coverage heartbeat so peers see fresh values, not just per-waypoint
-        self.create_timer(0.2, self._publish_coverage_status)
+        self.create_timer(0.2, self._update_coverage)
 
-    # ===== Coverage Tracking (grid-based) =====
 
-    def _on_odom(self, msg):
-        x = msg.pose.pose.position.x
-        y = msg.pose.pose.position.y
-        gx_c = int((x - self.x_start) / self.resolution)
-        gy_c = int((y - self.area[2]) / self.resolution)
-        # mark all cells within the sensor footprint, clipped to the assigned slice
-        r = int(self.coverage_radius / self.resolution)
-        r_sq = r * r
-        for dy in range(-r, r + 1):
-            for dx in range(-r, r + 1):
-                if dx * dx + dy * dy > r_sq:
-                    continue
-                gx, gy = gx_c + dx, gy_c + dy
-                if 0 <= gx < self.slice_w_cells and 0 <= gy < self.slice_h_cells:
-                    self.visited_cells.add((gx, gy))
-        
-    def _on_own_odom(self, msg):
-        if self.home_pose is None:
-            self.home_pose = (
-                msg.pose.pose.position.x,
-                msg.pose.pose.position.y
-            )
-
-    # ===== FSM Reaction =====
+    # ===== Callbacks: FSM =====
 
     def _on_fsm_command(self, msg):
         if msg.uav_id != self.uav_id:
@@ -223,6 +197,63 @@ class SwarmCoordinator(Node):
             return
 
         self.is_paused = False
+
+    # ===== Callbacks: Navigation =====
+
+    def _on_waypoint_reached(self, _msg):
+        if self.is_paused:
+            return
+
+        self.coverage_waypoints_visited += 1
+
+        # Report area from cells directly so covered/assigned are consistent.
+        cell_area = self.resolution * self.resolution
+        assigned_area = self.total_cells * cell_area
+        area_covered = len(self.visited_cells) * cell_area
+
+        self._publish_coverage(area_covered, assigned_area)
+        self._check_coverage_events()
+
+    # ===== Callbacks: Coverage =====
+
+    def _on_coverage_update(self, msg):
+        for uid, ratio in zip(msg.uav_ids, msg.coverage_ratios):
+            self.coverage_map[uid] = ratio
+
+    def _on_odom(self, msg):
+        x = msg.pose.pose.position.x
+        y = msg.pose.pose.position.y
+        gx_c = int((x - self.x_start) / self.resolution)
+        gy_c = int((y - self.area[2]) / self.resolution)
+        # mark all cells within the sensor footprint, clipped to the assigned slice
+        r = int(self.coverage_radius / self.resolution)
+        r_sq = r * r
+        for dy in range(-r, r + 1):
+            for dx in range(-r, r + 1):
+                if dx * dx + dy * dy > r_sq:
+                    continue
+                gx, gy = gx_c + dx, gy_c + dy
+                if 0 <= gx < self.slice_w_cells and 0 <= gy < self.slice_h_cells:
+                    self.visited_cells.add((gx, gy))
+        
+    def _on_own_odom(self, msg):
+        if self.home_pose is None:
+            self.home_pose = (
+                msg.pose.pose.position.x,
+                msg.pose.pose.position.y
+            )
+
+    # ===== Callbacks: Timers =====
+
+    def _on_completion_timeout(self):
+        self.destroy_timer(self._completion_timer)
+        self._completion_timer = None
+
+        # state changed during the hover (mission stop, detection, etc) — skip
+        if self.current_mode != 'REFINING':
+            return
+
+        self._publish_event('REFINEMENT_COMPLETE', value=self.last_coverage)
 
     # ===== Waypoint Generation =====
 
@@ -368,21 +399,11 @@ class SwarmCoordinator(Node):
         elif self.current_mode == 'ASSISTING':
             self._publish_event('ASSIST_COMPLETE')
 
-    def _on_completion_timeout(self):
-        self.destroy_timer(self._completion_timer)
-        self._completion_timer = None
-
-        # state changed during the hover (mission stop, detection, etc) — skip
-        if self.current_mode != 'REFINING':
-            return
-
-        self._publish_event('REFINEMENT_COMPLETE', value=self.last_coverage)
-
-    # ===== Helpers =====
-
     def _reset_coverage(self):
         self.coverage_waypoints_total = 0
         self.coverage_waypoints_visited = 0
+
+    # ===== Helpers =====
 
     def _publish_event(self, event: str, value: float = 0.0):
         msg = FSMEvent()
@@ -392,24 +413,6 @@ class SwarmCoordinator(Node):
         msg.timestamp = self.get_clock().now().nanoseconds / 1e9
         self._event_pub.publish(msg)
         self.get_logger().info(f'[{self.uav_id}] event → {event} (value={value:.2f})')
-
-    def _publish_coverage_status(self):
-        # 5Hz heartbeat so peers see fresh grid coverage between waypoint hits
-        if self.total_cells == 0 or self.current_mode in ('IDLE', 'RETURNING', 'EMERGENCY_STOP'):
-            return
-        cell_area = self.resolution * self.resolution
-        assigned_area = self.total_cells * cell_area
-        area_covered = len(self.visited_cells) * cell_area
-        self._publish_status(
-            f'[{self.uav_id}] PROGRESS: '
-            f'{self.coverage_waypoints_visited}/{max(self.coverage_waypoints_total, 1)} '
-            f'AREA: {area_covered:.1f}/{assigned_area:.1f}'
-        )
-
-    def _publish_status(self, text: str):
-        msg = String()
-        msg.data = text
-        self._status_pub.publish(msg)
 
 
 def main(args=None):

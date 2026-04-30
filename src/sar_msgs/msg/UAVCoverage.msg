@@ -1,0 +1,4 @@
+string uav_id
+float64 covered_area
+float64 assigned_area
+float64 timestamp
