@@ -262,14 +262,9 @@ class UAVStateManager(Node):
         if old_state == 'RECOVERY' and new_state != 'RECOVERY':
             self.recovery_attempts = 0
 
-        # verifying
+        # verifying — pause without wiping the plan
         if new_state == 'VERIFYING':
-            self._publish_command('STOP')
             self._publish_command('START_VERIFY')
-
-        # target lock
-        if new_state == 'TARGET_LOCK':
-            self._publish_command('STOP')
 
         # returning
         if new_state == 'RETURNING':

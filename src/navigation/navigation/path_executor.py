@@ -8,8 +8,12 @@ from nav_msgs.msg import Odometry, Path
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from sar_msgs.msg import FSMEvent
+from sar_msgs.msg import FSMEvent, UAVState
 from std_msgs.msg import Empty, String
+
+
+# States that pause motion without discarding the planned path.
+_PAUSE_STATES = {'VERIFYING', 'TARGET_LOCK'}
 
 
 class PathExecutorNode(Node):
@@ -45,6 +49,7 @@ class PathExecutorNode(Node):
         self.path_cells_total = 0
         self.path_cells_traversed = 0
         self._target_z = 1.0   # cruise altitude matching waypoint z
+        self.is_paused = False  # set when FSM enters VERIFYING/TARGET_LOCK
 
         qos_transient = QoSProfile(
             depth=1,
@@ -65,6 +70,8 @@ class PathExecutorNode(Node):
             Path, f'/{self.uav_id}/nav/planned_path', self._on_path_received, qos_transient)
         self.create_subscription(
             Odometry, f'/{self.uav_id}/state/odom', self._on_pose_update, 10)
+        self.create_subscription(
+            UAVState, '/uav/state', self._on_uav_state, 10)
 
         # ===== Timer =====
         self.create_timer(0.1, self._move_step)
@@ -79,6 +86,12 @@ class PathExecutorNode(Node):
         if self.home_x is None:
             self.home_x = self.uav_x
             self.home_y = self.uav_y
+
+    def _on_uav_state(self, msg):
+        # Filter to this UAV; UAVState is published on a shared topic.
+        if msg.uav_id != self.uav_id:
+            return
+        self.is_paused = msg.state in _PAUSE_STATES
 
     # ===== Path Reception =====
 
@@ -110,6 +123,12 @@ class PathExecutorNode(Node):
     # ===== Execution =====
 
     def _move_step(self):
+        # Paused (e.g. VERIFYING / TARGET_LOCK): hover, but keep the planned path
+        # so we can resume cleanly when the FSM transitions back.
+        if self.is_paused:
+            self._stop()
+            return
+
         if not self.current_path:
             self._stop()
             return
