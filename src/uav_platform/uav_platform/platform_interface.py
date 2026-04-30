@@ -70,7 +70,7 @@ class PlatformInterface(Node):
 
         min_dist = min(valid)
 
-        if min_dist < 1.0:
+        if min_dist < 1.5:
             if not self.too_close:
                 self._alert("COLLISION_RISK", f"Obstacle at {min_dist:.2f}m")
             self.too_close = True
