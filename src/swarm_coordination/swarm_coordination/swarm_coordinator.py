@@ -281,13 +281,41 @@ class SwarmCoordinator(Node):
         self._send_waypoints(poses, mode="SEARCH")
 
     def _publish_refinement_waypoints(self):
-        # start from the top-right where SEARCHING ended, snake back down
-        poses = _lawnmower(
-            self.x_start, self.x_end,
-            self.area[2], self.area[3],
-            self.rows * 2,
-            reverse=True
-        )
+        # search rows with unsearched cells
+        gap_rows = self._rows_with_gaps()
+
+        if not gap_rows:
+            self._send_waypoints([], mode="REFINE")
+            return
+
+        poses = []
+        if len(gap_rows) > self.rows * 2:
+            gap_rows = gap_rows[::2]  # take every other row
+
+            width = self.x_end - self.x_start
+            spacing = 2 * self.coverage_radius * 0.8
+            segments = max(2, int(width / spacing))
+            
+        for gy in gap_rows:
+            y = self.area[2] + (gy + 0.5) * self.resolution
+
+            # alternate direction for efficiency
+            if gy % 2 == 0:
+                xs = (self.x_start, self.x_end)
+            else:
+                xs = (self.x_end, self.x_start)
+
+            for k in range(segments + 1):
+                t = k / segments
+                x = xs[0] + (xs[1] - xs[0]) * t
+
+                p = Pose()
+                p.position.x = float(x)
+                p.position.y = float(y)
+                p.position.z = 1.0
+                p.orientation.w = 1.0
+                poses.append(p)
+
         self._send_waypoints(poses, mode="REFINE")
 
     def _publish_assistive_waypoints(self, pair_threshold):
@@ -419,6 +447,16 @@ class SwarmCoordinator(Node):
         self._region_complete_sent = False
 
     # ===== Helpers =====
+
+    def _rows_with_gaps(self):
+        rows = set()
+
+        for gx in range(self.slice_w_cells):
+            for gy in range(self.slice_h_cells):
+                if (gx, gy) not in self.visited_cells:
+                    rows.add(gy)
+
+        return sorted(rows)
 
     def _publish_event(self, event: str, value: float = 0.0):
         msg = FSMEvent()
