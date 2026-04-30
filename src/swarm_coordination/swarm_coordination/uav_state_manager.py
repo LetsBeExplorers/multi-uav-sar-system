@@ -96,6 +96,7 @@ class UAVStateManager(Node):
         self._handle_event('MISSION_STOP')
 
     def _on_mission_halt(self, _msg):
+        self._transition('EMERGENCY_STOP')
         self._publish_command('STOP')
 
     def _on_fsm_event(self, msg):
@@ -192,7 +193,6 @@ class UAVStateManager(Node):
                     self._publish_command('START_ASSIST')
                 else:
                     self._transition('RETURNING')
-                    self._publish_command('GO_HOME')
 
             elif event == 'DETECTION_EVENT':
                 self._transition('VERIFYING')
