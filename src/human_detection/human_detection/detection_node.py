@@ -3,7 +3,10 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Empty
 from nav_msgs.msg import Odometry
-from sar_msgs.msg import DetectionEvent, FSMEvent, Alert
+from sar_msgs.msg import DetectionEvent, FSMEvent, Alert, UAVState
+
+# States where detection should be running
+_DETECT_STATES = {'SEARCHING', 'REFINING', 'ASSISTING'}
 
 
 class DetectionNode(Node):
@@ -35,6 +38,7 @@ class DetectionNode(Node):
         self.current_position = None
         self.targets = []
         self.confirmed_targets = []
+        self.fsm_state = 'IDLE'
 
         # ===== Publishers =====
         self._detection_pub = self.create_publisher(DetectionEvent, f'/{self.uav_id}/detection/event', 10)
@@ -47,6 +51,7 @@ class DetectionNode(Node):
         self.create_subscription(Odometry, f'/{self.uav_id}/state/odom', self._on_odom, 10)
         self.create_subscription(DetectionEvent, '/mission/targets', self._on_target, 10) # temporary
         self.create_subscription(DetectionEvent, '/targets/confirmed', self._on_target_confirmed, 10)
+        self.create_subscription(UAVState, '/uav/state', self._on_uav_state, 10)
 
         # ===== Timers =====
         self.create_timer(1.0 / rate, self._tick)
@@ -55,6 +60,10 @@ class DetectionNode(Node):
 
     def _tick(self):
         if not self.mission_active:
+            return
+
+        # Only run detection in active search states
+        if self.fsm_state not in _DETECT_STATES:
             return
 
         # No pose yet — skip rather than firing fakes blindly.
@@ -107,6 +116,7 @@ class DetectionNode(Node):
         self.detection_active = False
         self.targets = []
         self.confirmed_targets = []
+        self.fsm_state = 'IDLE'
 
     def _on_odom(self, msg):
         self.current_position = (
@@ -119,6 +129,18 @@ class DetectionNode(Node):
 
     def _on_target_confirmed(self, msg):
         self.confirmed_targets.append((msg.x, msg.y))
+
+    def _on_uav_state(self, msg):
+        # Filter to this UAV; UAVState is published on a shared topic.
+        if msg.uav_id != self.uav_id:
+            return
+
+        prev = self.fsm_state
+        self.fsm_state = msg.state
+
+        if prev in _DETECT_STATES and msg.state not in _DETECT_STATES:
+            self.consecutive_detections = 0
+            self.detection_active = False
 
     # ===== Detection Logic =====
 
