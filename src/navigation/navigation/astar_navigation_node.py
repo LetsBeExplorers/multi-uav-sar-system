@@ -7,7 +7,7 @@ from nav_msgs.msg import OccupancyGrid, Odometry, Path
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from sar_msgs.msg import FSMEvent
+from sar_msgs.msg import Alert, FSMEvent
 from std_msgs.msg import Empty, String
 
 GridCell = Tuple[int, int]
@@ -61,6 +61,7 @@ class AStarNavigationNode(Node):
             Path, f'/{self.uav_id}/nav/planned_path', qos_transient)
         self._event_pub = self.create_publisher(
             FSMEvent, f'/{self.uav_id}/fsm/event', 10)
+        self._alert_pub = self.create_publisher(Alert, '/alerts', 10)
         self._status_pub = self.create_publisher(String, '/mission/status', 10)
 
         # ===== Subscribers =====
@@ -228,8 +229,14 @@ class AStarNavigationNode(Node):
             if not self._in_failure and self._consecutive_failures >= self._path_failed_threshold:
                 self._in_failure = True
                 self._publish_event('PATH_FAILED')
+                self._publish_alert('PATH_FAILED',
+                    f'No path to waypoint {self.waypoint_index} after {self._consecutive_failures} attempts',
+                    level='WARNING')
             elif self._in_failure and self._consecutive_failures >= self._max_replan_attempts:
                 self._publish_event('REPLAN_FAIL')
+                self._publish_alert('REPLAN_FAIL',
+                    f'Replanning exhausted for waypoint {self.waypoint_index} — skipping',
+                    level='CRITICAL')
                 self._in_failure = False
                 self._consecutive_failures = 0
             self._log_metrics()
@@ -385,6 +392,15 @@ class AStarNavigationNode(Node):
         msg.event = event
         msg.timestamp = self.get_clock().now().nanoseconds / 1e9
         self._event_pub.publish(msg)
+
+    def _publish_alert(self, typ: str, message: str, level: str = 'WARNING'):
+        msg = Alert()
+        msg.uav_id = self.uav_id
+        msg.type = typ
+        msg.level = level
+        msg.message = message
+        self.alert_pub = self._alert_pub  # alias for clarity
+        self._alert_pub.publish(msg)
 
     # ===== Metrics =====
 
