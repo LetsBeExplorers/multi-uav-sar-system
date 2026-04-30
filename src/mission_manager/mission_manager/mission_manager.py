@@ -109,18 +109,21 @@ class MissionManager(Node):
     # ===== Alerts =====
 
     def _on_alert(self, msg):
+        # dashboard display
         self.alert_log.append(msg)
-
-        # keep only last 5 alerts (prevents spam explosion)
         self.alert_log = self.alert_log[-5:]
 
         # track failures
         if msg.level in ['WARNING', 'CRITICAL']:
+            t = self.get_clock().now().nanoseconds / 1e9
+
             self.failures.append({
                 "uav_id": msg.uav_id,
                 "type": msg.type,
-                "time": self.get_clock().now().nanoseconds / 1e9
+                "time": t
             })
+
+            self.csv_writer.writerow([t, msg.uav_id, msg.type])
 
         self._refresh_dashboard()
 
