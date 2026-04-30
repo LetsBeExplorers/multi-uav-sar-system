@@ -18,11 +18,13 @@ class DetectionNode(Node):
             ('persistence_threshold', 3),
             ('detection_rate_hz', 5.0),
             ('fake_detection_probability', 0.05),
+            ('detection_range', 2.5),
         ])
 
         self.uav_id = self.get_parameter('uav_id').value
         self.confidence_threshold = self.get_parameter('confidence_threshold').value
         self.persistence_threshold = self.get_parameter('persistence_threshold').value
+        self.detection_range = self.get_parameter('detection_range').value
         self.fake_prob = self.get_parameter('fake_detection_probability').value
         rate = self.get_parameter('detection_rate_hz').value
 
@@ -33,6 +35,7 @@ class DetectionNode(Node):
         self.warmup_duration = 5.0  # seconds
         self.detection_active = False
         self.current_position = None
+        self.targets = []
 
         # ===== Publishers =====
         self._detection_pub = self.create_publisher(DetectionEvent, f'/{self.uav_id}/detection/event', 10)
@@ -43,6 +46,7 @@ class DetectionNode(Node):
         self.create_subscription(Empty, '/mission/start', self._on_start, 10)
         self.create_subscription(Empty, '/mission/stop', self._on_stop, 10)
         self.create_subscription(Odometry, f'/{self.uav_id}/state/odom', self._on_odom, 10)
+        self.create_subscription(DetectionEvent, '/mission/targets', self._on_target, 10) # temporary
 
         # ===== Timers =====
         self.create_timer(1.0 / rate, self._tick)
@@ -59,9 +63,27 @@ class DetectionNode(Node):
         if now - self.start_time < self.warmup_duration:
             return
 
+        # check if near real target FIRST
+        near_real = False
+
+        if self.current_position is not None:
+            px, py = self.current_position
+            for (tx, ty) in self.targets:
+                dx = tx - px
+                dy = ty - py
+                dist = (dx*dx + dy*dy) ** 0.5
+                if dist < self.detection_range:
+                    near_real = True
+                    break
+
+        # simulate only for fake detections
         confidence = self._simulate_detection()
 
-        if confidence < self.confidence_threshold:
+        # reset detection when no longer near a real target
+        if not near_real:
+            self.detection_active = False
+
+        if not near_real and confidence < self.confidence_threshold:
             self.consecutive_detections = 0
             return
 
@@ -85,6 +107,7 @@ class DetectionNode(Node):
         self.mission_active = True
         self.start_time = self.get_clock().now().nanoseconds / 1e9
         self.consecutive_detections = 0
+        self.targets = []
         self.detection_active = False
 
     def _on_stop(self, _msg):
@@ -98,6 +121,9 @@ class DetectionNode(Node):
             msg.pose.pose.position.y
         )
 
+    def _on_target(self, msg):
+        self.targets.append((msg.x, msg.y))
+
     # ===== Detection Logic =====
 
     def _simulate_detection(self):
@@ -109,25 +135,44 @@ class DetectionNode(Node):
         now = self.get_clock().now().nanoseconds / 1e9
 
         self._publish_detection(now, confidence)
-        self._publish_fsm_event(now, confidence)
         self._publish_alert(now, confidence)
 
     # ===== Publishers =====
 
     def _publish_detection(self, timestamp, confidence):
+        if self.current_position is None:
+            return
+
         msg = DetectionEvent()
         msg.uav_id = self.uav_id
-        if self.current_position is None:
-            return  # don't publish until we know where we are
 
         px, py = self.current_position
 
-        # small random offset around UAV
-        msg.x = px + random.uniform(-1.0, 1.0)
-        msg.y = py + random.uniform(-1.0, 1.0)
-        msg.confidence = confidence
-        msg.timestamp = timestamp
-        self._detection_pub.publish(msg)
+        # real detection
+        for (tx, ty) in self.targets:
+            dx = tx - px
+            dy = ty - py
+            dist = (dx*dx + dy*dy) ** 0.5
+
+            if dist < self.detection_range:
+                msg.x = tx + random.uniform(-0.2, 0.2)
+                msg.y = ty + random.uniform(-0.2, 0.2)
+                msg.confidence = random.uniform(0.8, 1.0)
+                msg.timestamp = timestamp
+
+                self._detection_pub.publish(msg)
+                self._publish_fsm_event(timestamp, msg.confidence)
+                return
+
+        # fake detection
+        if random.random() < self.fake_prob:
+            msg.x = px + random.uniform(-0.5, 0.5)
+            msg.y = py + random.uniform(-0.5, 0.5)
+            msg.confidence = random.uniform(0.3, 0.6)
+            msg.timestamp = timestamp
+
+            self._detection_pub.publish(msg)
+            self._publish_fsm_event(timestamp, msg.confidence)
 
     def _publish_fsm_event(self, timestamp, confidence):
         msg = FSMEvent()

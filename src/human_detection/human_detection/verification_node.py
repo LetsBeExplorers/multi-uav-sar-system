@@ -1,6 +1,7 @@
 import random
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import Empty
 from sar_msgs.msg import FSMEvent, Alert, DetectionEvent
 
 
@@ -29,6 +30,7 @@ class VerificationNode(Node):
         self._timeout_timer = None
         self._deciding = False  # re-entry guard
         self._last_detection = None  # (x, y, confidence) of most recent detection
+        self.targets = []
 
         # ===== Publishers =====
         self._fsm_pub = self.create_publisher(FSMEvent, f'/{self.uav_id}/fsm/event', 10)
@@ -38,8 +40,17 @@ class VerificationNode(Node):
         # ===== Subscribers =====
         self.create_subscription(FSMEvent, f'/{self.uav_id}/fsm/command', self._on_command, 10)
         self.create_subscription(DetectionEvent, f'/{self.uav_id}/detection/event', self._on_detection, 10)
+        self.create_subscription(DetectionEvent, '/mission/targets', self._on_target, 10) # temporary
+        self.create_subscription(Empty, '/mission/start', self._on_start, 10)
 
     # ===== Callbacks =====
+
+    def _on_start(self, _msg):
+        self.targets = []
+        self._last_detection = None
+
+    def _on_target(self, msg):
+        self.targets.append((msg.x, msg.y))
 
     def _on_command(self, msg):
         if msg.uav_id != self.uav_id:
@@ -91,7 +102,22 @@ class VerificationNode(Node):
             self._timeout_timer = None
 
     def _simulate_verification(self):
-        return 'CONFIRMED_TARGET' if random.random() < self.confirm_prob else 'FALSE_POSITIVE'
+        if not self.targets:
+            return 'FALSE_POSITIVE'
+
+        if self._last_detection is None:
+            return 'FALSE_POSITIVE'
+
+        dx, dy, conf = self._last_detection
+
+        # check against real mission targets
+        for (tx, ty) in self.targets:
+            dist = ((tx - dx)**2 + (ty - dy)**2) ** 0.5
+
+            if dist < 2.0:  # match your detection_range (~2.5)
+                return 'CONFIRMED_TARGET'
+
+        return 'FALSE_POSITIVE'
 
     def _handle_result(self, result):
         now = self.get_clock().now().nanoseconds / 1e9

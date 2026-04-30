@@ -2,6 +2,7 @@ import threading
 import csv
 import os
 import time
+import random
 from datetime import datetime
 
 import rclpy
@@ -37,6 +38,7 @@ class MissionManager(Node):
         self.target_goal = 0
         self.targets_found = 0
         self.confirmed_targets = []
+        self.detection_log = []
         self.failures = []
         self.is_test = 'PYTEST_CURRENT_TEST' in os.environ
 
@@ -46,12 +48,20 @@ class MissionManager(Node):
         self._end_pub = self.create_publisher(Empty, '/mission/end', 10)
         self._complete_pub = self.create_publisher(Empty, '/mission/complete', 10)
         self._coverage_pub = self.create_publisher(MissionCoverage, '/mission/coverage', 10)
+        self._targets_pub = self.create_publisher(DetectionEvent, '/mission/targets', 10) # temporary
 
         # ===== Subscribers =====
         self.create_subscription(UAVState, '/uav/state', self._on_uav_state_change, 10)
         self.create_subscription(UAVCoverage, '/uav/coverage', self._on_coverage_msg, 10)
         self.create_subscription(Alert, '/alerts', self._on_alert, 10)
         self.create_subscription(DetectionEvent, '/targets/confirmed', self._on_target_confirmed, 10)
+        for uid in self.uav_ids:
+            self.create_subscription(
+                DetectionEvent,
+                f'/{uid}/detection/event',
+                self._on_detection,
+                10
+            )
 
         # ===== Mission timing =====
         self.mission_start_time = None
@@ -126,12 +136,16 @@ class MissionManager(Node):
         if self.mission_state != 'RUNNING':
             return
             
-        new_target = (msg.x, msg.y)
+        t = msg.timestamp
+        new_target = (msg.x, msg.y, t)
 
         # prevent duplicates
-        for (x, y) in self.confirmed_targets:
+        for (x, y, *_ ) in self.confirmed_targets:
             if abs(x - new_target[0]) < 1.0 and abs(y - new_target[1]) < 1.0:
                 return
+
+        dt = t - self.mission_start_time
+        self.detection_log.append(dt)
 
         self.confirmed_targets.append(new_target)
         self.targets_found += 1
@@ -197,28 +211,45 @@ class MissionManager(Node):
             return
         self._summary_written = True
 
-        t_end = time.time()
+        t_end = self.get_clock().now().nanoseconds / 1e9
         mission_time = round(t_end - self.mission_start_time, 2) if self.mission_start_time else -1
 
         # Per-UAV coverage
         coverages = {uid: round(self.uav_coverage.get(uid, 0.0), 4) for uid in self.uav_ids}
         avg_coverage = round(sum(coverages.values()) / len(coverages), 4) if coverages else 0.0
 
-        collision_count = sum(1 for f in self.failures if 'COLLISION' in f.get('type', '').upper())
+        collision_count = sum(
+            1 for f in self.failures
+            if f.get('type', '').upper() == 'HARD_COLLISION'
+        )
+
+        collision_risk_count = sum(
+            1 for f in self.failures
+            if f.get('type', '').upper() == 'COLLISION_RISK'
+        )
+        
         path_fail_count = sum(1 for f in self.failures if f.get('type', '').upper() == 'REPLAN_FAIL')
+
+        if self.detection_log:
+            avg_dt = round(sum(self.detection_log) / len(self.detection_log), 2)
+        else:
+            avg_dt = -1
 
         # Write a blank separator line then the summary block
         self.csv_writer.writerow([])
         self.csv_writer.writerow(['--- MISSION SUMMARY ---'])
         self.csv_writer.writerow(['success', 'mission_time_s', 'targets_found',
-                                  'avg_coverage', 'collisions', 'path_failures',
+                                  'avg_detection_time',
+                                  'avg_coverage', 'collisions', 'collision_risks', 'path_failures',
                                   *[f'coverage_{uid}' for uid in self.uav_ids]])
         self.csv_writer.writerow([
             int(success),
             mission_time,
             self.targets_found,
+            avg_dt,
             avg_coverage,
             collision_count,
+            collision_risk_count,
             path_fail_count,
             *[coverages[uid] for uid in self.uav_ids],
         ])
@@ -278,9 +309,28 @@ class MissionManager(Node):
             return
 
         self.target_goal = target_goal
+        self.targets = []
+
+        for _ in range(target_goal):
+            x = random.uniform(-8, 8)
+            y = random.uniform(-8, 8)
+            self.targets.append((x, y))
+
+        self._wait_for_subscribers(self._targets_pub)
+
+        for (x, y) in self.targets:
+            msg = DetectionEvent()
+            msg.uav_id = 'mission'
+            msg.x = x
+            msg.y = y
+            msg.confidence = 1.0
+            msg.timestamp = self.get_clock().now().nanoseconds / 1e9
+
+            self._targets_pub.publish(msg)
+
         self.targets_found = 0
         self.confirmed_targets = []
-        self.mission_start_time = time.time()
+        self.mission_start_time = self.get_clock().now().nanoseconds / 1e9
         self._summary_written = False
 
         print(f'Starting mission with target goal: {target_goal}')
