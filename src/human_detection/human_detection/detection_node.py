@@ -3,7 +3,7 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Empty
 from nav_msgs.msg import Odometry
-from sar_msgs.msg import DetectionEvent, FSMEvent, Alert, UAVState
+from sar_msgs.msg import DetectionEvent, FSMEvent, Alert
 
 
 class DetectionNode(Node):
@@ -31,12 +31,8 @@ class DetectionNode(Node):
         # ===== State =====
         self.consecutive_detections = 0
         self.mission_active = False
-        self.start_time = None
-        self.warmup_duration = 5.0  # seconds
         self.detection_active = False
         self.current_position = None
-        self.takeoff_altitude = 0.5  # min z before we consider the UAV airborne
-        self.current_altitude = 0.0
         self.targets = []
 
         # ===== Publishers =====
@@ -49,7 +45,6 @@ class DetectionNode(Node):
         self.create_subscription(Empty, '/mission/stop', self._on_stop, 10)
         self.create_subscription(Odometry, f'/{self.uav_id}/state/odom', self._on_odom, 10)
         self.create_subscription(DetectionEvent, '/mission/targets', self._on_target, 10) # temporary
-        self.create_subscription(UAVState, '/uav/state', self._on_uav_state, 10)
 
         # ===== Timers =====
         self.create_timer(1.0 / rate, self._tick)
@@ -57,7 +52,7 @@ class DetectionNode(Node):
     # ===== Core Loop =====
 
     def _tick(self):
-        if not self.mission_active or self.start_time is None:
+        if not self.mission_active:
             return
 
         # No pose yet — skip rather than firing fakes blindly.
@@ -65,10 +60,6 @@ class DetectionNode(Node):
             return
 
         now = self.get_clock().now().nanoseconds / 1e9
-
-        # warmup guard
-        if now - self.start_time < self.warmup_duration:
-            return
 
         # check if near real target FIRST
         near_real = self._is_near_real_target()
@@ -105,7 +96,6 @@ class DetectionNode(Node):
 
     def _on_start(self, _msg):
         self.mission_active = True
-        self.start_time = None
         self.consecutive_detections = 0
         self.detection_active = False
 
@@ -120,18 +110,6 @@ class DetectionNode(Node):
             msg.pose.pose.position.x,
             msg.pose.pose.position.y
         )
-
-    def _on_uav_state(self, msg):
-        # Filter to this UAV; UAVState is published on a shared topic.
-        if msg.uav_id != self.uav_id:
-            return
-
-        if (
-            self.mission_active
-            and self.start_time is None
-            and msg.state in ('SEARCHING', 'REFINING', 'ASSISTING')
-        ):
-            self.start_time = self.get_clock().now().nanoseconds / 1e9
 
     def _on_target(self, msg):
         self.targets.append((msg.x, msg.y))
