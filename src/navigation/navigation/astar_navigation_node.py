@@ -23,7 +23,7 @@ class AStarNavigationNode(Node):
             namespace='',
             parameters=[
                 ('uav_id', 'x1'),
-                ('replan_check_rate', 0.5),
+                ('replan_check_rate', 5.0),
                 ('x_min', -999.0),
                 ('x_max', 999.0),
             ]
