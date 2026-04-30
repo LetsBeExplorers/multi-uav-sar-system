@@ -47,6 +47,8 @@ class WorldModelNode(Node):
         self.dynamic_cells = {}   # uav_id -> set of (gx, gy) cells
         self.own_pose = None
         self.collision_count = 0
+        self.last_collision_time = self.get_clock().now()
+        self.collision_cooldown = 1.0
 
         # ===== Static Obstacles =====
         # param is a flat list [x1, y1, x2, y2, ...]
@@ -234,6 +236,24 @@ class WorldModelNode(Node):
         y = msg.pose.pose.position.y
         q = msg.pose.pose.orientation
         yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y ** 2 + q.z ** 2))
+
+        gx, gy = self.world_to_grid(x, y)
+
+        if self._in_bounds(gx, gy):
+            now = self.get_clock().now()
+            dt = (now - self.last_collision_time).nanoseconds / 1e9
+
+            if self.static_grid[gy][gx] == 1 and dt > self.collision_cooldown:
+                self.collision_count += 1
+                self.last_collision_time = now
+
+                event = FSMEvent()
+                event.uav_id = self.uav_id
+                event.event = 'COLLISION_STATIC'
+                event.timestamp = self.get_clock().now().nanoseconds / 1e9
+
+                self._event_pub.publish(event)
+
         self.own_pose = (x, y, yaw)
 
     def _on_dynamic_obstacle_update(self, uav_id, msg):
@@ -251,17 +271,26 @@ class WorldModelNode(Node):
         self.dynamic_cells[uav_id] = cells
         self.dynamic_obstacles[uav_id] = (x, y)
 
-        # collision check (unchanged)
+        # collision check
         if self.own_pose is not None:
             ox, oy, _ = self.own_pose
-            dist = math.hypot(x - ox, y - oy)
-            if dist < self.collision_threshold:
-                self.collision_count += 1
-                event = FSMEvent()
-                event.uav_id = self.uav_id
-                event.event = 'COLLISION_RISK'
-                event.timestamp = self.get_clock().now().nanoseconds / 1e9
-                self._event_pub.publish(event)
+            now = self.get_clock().now()
+            dt = (now - self.last_collision_time).nanoseconds / 1e9
+            own_gx, own_gy = self.world_to_grid(ox, oy)
+
+            for cells in self.dynamic_cells.values():
+                if (own_gx, own_gy) in cells:
+                    if dt > self.collision_cooldown:
+                        self.collision_count += 1
+                        self.last_collision_time = now
+
+                        event = FSMEvent()
+                        event.uav_id = self.uav_id
+                        event.timestamp = now.nanoseconds / 1e9
+                        event.event = 'COLLISION_UAV'
+
+                        self._event_pub.publish(event)
+                    break
 
     # ===== Grid Publisher =====
 
