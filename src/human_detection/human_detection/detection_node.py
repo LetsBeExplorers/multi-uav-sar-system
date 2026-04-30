@@ -107,13 +107,13 @@ class DetectionNode(Node):
         self.mission_active = True
         self.start_time = self.get_clock().now().nanoseconds / 1e9
         self.consecutive_detections = 0
-        self.targets = []
         self.detection_active = False
 
     def _on_stop(self, _msg):
         self.mission_active = False
         self.consecutive_detections = 0
         self.detection_active = False
+        self.targets = []
 
     def _on_odom(self, msg):
         self.current_position = (
