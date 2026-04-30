@@ -77,19 +77,31 @@ class MissionManager(Node):
     # ===== ROS Callbacks =====
 
     def _on_uav_state_change(self, msg):
+        prev = self.uav_states.get(msg.uav_id)
+
         if msg.uav_id in self.uav_states:
             self.uav_states[msg.uav_id] = msg.state
 
+        if prev != msg.state:
+            self._refresh_dashboard()
+
         self._check_mission_complete()
-        self._refresh_dashboard()
 
     def _on_coverage_msg(self, msg):
+        if self.mission_state == 'IDLE':
+            return
+        prev = self.uav_coverage.get(msg.uav_id, None)
+
         self._update_coverage(
             msg.uav_id,
             msg.covered_area,
             msg.assigned_area
         )
-        self._refresh_dashboard()
+
+        new = self.uav_coverage.get(msg.uav_id, None)
+
+        if prev != new:
+            self._refresh_dashboard()
 
     def _on_alert(self, msg):
         # dashboard display
