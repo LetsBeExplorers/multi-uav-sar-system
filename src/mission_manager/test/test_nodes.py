@@ -162,3 +162,64 @@ def test_all_uavs_idle_sets_complete():
 
         uut.destroy_node()
         helper.destroy_node()
+
+def test_target_based_completion():
+    """Mission completes when enough confirmed targets are received."""
+    with patch.object(MissionManager, '_refresh_dashboard'):
+        uut = MissionManager()
+        uut.mission_state = 'RUNNING'
+        uut.target_goal = 2
+
+        helper = rclpy.create_node('test_target_helper')
+        pub = helper.create_publisher(DetectionEvent, '/targets/confirmed', 10)
+
+        _spin(uut, helper, 10)
+
+        # First target
+        msg1 = DetectionEvent()
+        msg1.x = 1.0
+        msg1.y = 2.0
+        pub.publish(msg1)
+        _spin(uut, helper, 10)
+
+        assert uut.mission_state == 'RUNNING'
+
+        # Second target → should complete mission
+        msg2 = DetectionEvent()
+        msg2.x = 5.0
+        msg2.y = 6.0
+        pub.publish(msg2)
+        _spin(uut, helper, 10)
+
+        assert uut.mission_state == 'COMPLETE'
+
+        uut.destroy_node()
+        helper.destroy_node()
+
+def test_duplicate_targets_not_counted():
+    """Duplicate target locations should not increment target count."""
+    with patch.object(MissionManager, '_refresh_dashboard'):
+        uut = MissionManager()
+        uut.mission_state = 'RUNNING'
+        uut.target_goal = 2
+
+        helper = rclpy.create_node('test_duplicate_target_helper')
+        pub = helper.create_publisher(DetectionEvent, '/targets/confirmed', 10)
+
+        _spin(uut, helper, 10)
+
+        msg = DetectionEvent()
+        msg.x = 1.0
+        msg.y = 2.0
+
+        pub.publish(msg)
+        _spin(uut, helper, 10)
+
+        pub.publish(msg)  # same target again
+        _spin(uut, helper, 10)
+
+        assert uut.targets_found == 1
+        assert uut.mission_state == 'RUNNING'
+
+        uut.destroy_node()
+        helper.destroy_node()
