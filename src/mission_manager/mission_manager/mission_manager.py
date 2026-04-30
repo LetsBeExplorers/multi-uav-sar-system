@@ -1,5 +1,8 @@
 import threading
+import csv
+import os
 import time
+from datetime import datetime
 
 import rclpy
 from rclpy.executors import ExternalShutdownException
@@ -34,6 +37,7 @@ class MissionManager(Node):
         self.target_goal = 0
         self.targets_found = 0
         self.confirmed_targets = []
+        self.failures = []
 
         # ===== Publishers =====
         self._start_pub = self.create_publisher(Empty, '/mission/start', 10)
@@ -46,6 +50,19 @@ class MissionManager(Node):
         self.create_subscription(UAVCoverage, '/uav/coverage', self._on_coverage_msg, 10)
         self.create_subscription(Alert, '/alerts', self._on_alert, 10)
         self.create_subscription(DetectionEvent, '/targets/confirmed', self._on_target_confirmed, 10)
+
+        # ===== Results Logging =====
+        results_dir = "results"
+        os.makedirs(results_dir, exist_ok=True)
+
+        now = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        self.results_file_path = os.path.join("results", f"mission_{now}.csv")
+
+        self.csv_file = open(self.results_file_path, 'w', newline='')
+        self.csv_writer = csv.writer(self.csv_file)
+
+        # header
+        self.csv_writer.writerow(['time', 'uav_id', 'event_type'])
 
     # ===== State Tracking =====
 
@@ -96,6 +113,14 @@ class MissionManager(Node):
 
         # keep only last 5 alerts (prevents spam explosion)
         self.alert_log = self.alert_log[-5:]
+
+        # track failures
+        if msg.level in ['WARNING', 'CRITICAL']:
+            self.failures.append({
+                "uav_id": msg.uav_id,
+                "type": msg.type,
+                "time": self.get_clock().now().nanoseconds / 1e9
+            })
 
         self._refresh_dashboard()
 
