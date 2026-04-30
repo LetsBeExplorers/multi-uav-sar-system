@@ -4,9 +4,8 @@ import time
 import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
-from sar_msgs.msg import MissionCoverage, UAVState, Alert, DetectionEvent
+from sar_msgs.msg import MissionCoverage, UAVState, Alert, DetectionEvent, UAVCoverage
 from std_msgs.msg import Empty, String
-
 
 class MissionManager(Node):
 
@@ -44,7 +43,7 @@ class MissionManager(Node):
 
         # ===== Subscribers =====
         self.create_subscription(UAVState, '/uav/state', self._on_uav_state_change, 10)
-        self.create_subscription(String, '/mission/status', self._on_status, 10)
+        self.create_subscription(UAVCoverage, '/uav/coverage', self._on_coverage_msg, 10)
         self.create_subscription(Alert, '/alerts', self._on_alert, 10)
         self.create_subscription(DetectionEvent, '/targets/confirmed', self._on_target_confirmed, 10)
 
@@ -64,28 +63,23 @@ class MissionManager(Node):
         self._refresh_dashboard()
 
     def _on_status(self, msg):
-        text = msg.data
-
-        if 'PROGRESS' in text:
-            try:
-                # Format: "[x1] PROGRESS: 50/100 AREA: 200.0/400.0"
-                uav_id = text.split(']')[0].lstrip('[')
-                if 'AREA:' in text:
-                    area = text.split('AREA:')[1].strip()
-                    covered, assigned = area.split('/')
-                    covered_f = float(covered)
-                    assigned_f = float(assigned)
-                    self.uav_area[uav_id] = (covered_f, assigned_f)
-                    # grid coverage (monotonic) — route progress resets each phase
-                    if assigned_f > 0:
-                        self.uav_coverage[uav_id] = covered_f / assigned_f
-                        self._publish_coverage()
-            except (IndexError, ValueError):
-                pass
-
         self._refresh_dashboard()
 
     # ===== Coverage Aggregation =====
+
+    def _on_coverage_msg(self, msg):
+        self._update_coverage(
+            msg.uav_id,
+            msg.covered_area,
+            msg.assigned_area
+        )
+        self._refresh_dashboard()
+
+    def _update_coverage(self, uav_id, covered, assigned):
+        self.uav_area[uav_id] = (covered, assigned)
+        if assigned > 0:
+            self.uav_coverage[uav_id] = covered / assigned
+            self._publish_coverage()
 
     def _publish_coverage(self):
         msg = MissionCoverage()

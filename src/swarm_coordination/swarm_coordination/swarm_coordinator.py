@@ -7,7 +7,7 @@ import rclpy
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from sar_msgs.msg import FSMEvent, MissionCoverage, UAVState
+from sar_msgs.msg import FSMEvent, MissionCoverage, UAVState, UAVCoverage
 from std_msgs.msg import Empty, String
 from swarm_coordination.uav_state_manager import assign_helpers
 
@@ -306,29 +306,23 @@ class SwarmCoordinator(Node):
 
     # ===== Coverage Tracking =====
 
-    def _on_waypoint_reached(self, _msg):
-        if self.is_paused:
+    def _update_coverage(self):
+        if self.total_cells == 0 or self.current_mode in ('IDLE', 'RETURNING', 'EMERGENCY_STOP'):
             return
 
-        self.coverage_waypoints_visited += 1
-
-        # Report area from cells directly so covered/assigned are consistent.
         cell_area = self.resolution * self.resolution
         assigned_area = self.total_cells * cell_area
-        coverage_ratio = len(self.visited_cells) / self.total_cells if self.total_cells else 0.0
         area_covered = len(self.visited_cells) * cell_area
 
-        self._publish_status(
-            f'[{self.uav_id}] PROGRESS: '
-            f'{self.coverage_waypoints_visited}/{self.coverage_waypoints_total} '
-            f'AREA: {area_covered:.1f}/{assigned_area:.1f}'
-        )
+        self._publish_coverage(area_covered, assigned_area)
 
-        self._check_coverage_events()
-
-    def _on_coverage_update(self, msg):
-        for uid, ratio in zip(msg.uav_ids, msg.coverage_ratios):
-            self.coverage_map[uid] = ratio
+    def _publish_coverage(self, area_covered, assigned_area):
+        msg = UAVCoverage()
+        msg.uav_id = self.uav_id
+        msg.covered_area = area_covered
+        msg.assigned_area = assigned_area
+        msg.timestamp = self.get_clock().now().nanoseconds / 1e9
+        self._coverage_pub.publish(msg)
 
     def _check_coverage_events(self):
         if self.coverage_waypoints_total == 0:
