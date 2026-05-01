@@ -27,7 +27,7 @@ class WorldModelNode(Node):
                 ('origin_x', -10.0),
                 ('origin_y', -10.0),
                 ('static_obstacles', []),
-                ('collision_threshold', 0.5),
+                ('collision_threshold', 0.27),
             ]
         )
 
