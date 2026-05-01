@@ -64,7 +64,7 @@ class VerificationNode(Node):
 
     def _on_detection(self, msg):
         # Cache the most recent detection so we can report its location on confirm.
-        if msg.uav_id != self.uav_id:
+        if msg.uav_id and msg.uav_id != self.uav_id:
             return
         self._last_detection = (msg.x, msg.y, msg.confidence)
 
