@@ -45,7 +45,6 @@ for WORLD in "${WORLDS[@]}"; do
   gnome-terminal -- bash -c "
     cd '$SCRIPT_DIR';
     ./run_sim.sh '$WORLD';
-    exec bash
   "
 
   sleep 3
