@@ -128,6 +128,9 @@ class MissionManager(Node):
             return
             
         t = msg.timestamp
+        if self.mission_start_time is None:
+            self.mission_start_time = t
+
         new_target = (msg.x, msg.y, t)
 
         EPS = 0.01
