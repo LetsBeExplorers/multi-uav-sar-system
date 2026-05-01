@@ -340,18 +340,18 @@ class MissionManager(Node):
         if self.mission_state == 'IDLE':
             print('Mission not running')
             return
-
         self._wait_for_subscribers(self._end_pub)
         self.mission_state = 'ENDED'
+        self._log_mission_summary(success=False)
         self._end_pub.publish(Empty())
 
     def send_stop(self):
         if self.mission_state == 'IDLE':
             print('Mission not running')
             return
-
         self._wait_for_subscribers(self._stop_pub)
         self.mission_state = 'STOPPED'
+        self._log_mission_summary(success=False)
         self._stop_pub.publish(Empty())
 
     def _wait_for_subscribers(self, pub, timeout=5.0):
