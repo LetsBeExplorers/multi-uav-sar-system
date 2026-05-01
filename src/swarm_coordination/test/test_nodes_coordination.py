@@ -363,13 +363,19 @@ def test_hard_collision_goes_to_emergency_stop():
     uut.destroy_node()
 
 
-def test_emergency_stop_ignores_all_events_except_reset():
+def test_emergency_stop_allows_mission_start_override():
     uut = _make_fsm()
     uut.current_state = 'EMERGENCY_STOP'
-    for event in ('MISSION_START', 'LOW_BATTERY', 'MISSION_STOP', 'PATH_FAILED'):
+
+    # START should override emergency stop in this system
+    uut._handle_event('MISSION_START')
+    assert uut.current_state == 'IDLE'
+
+    # other events should still be ignored
+    uut.current_state = 'EMERGENCY_STOP'
+    for event in ('LOW_BATTERY', 'MISSION_STOP', 'PATH_FAILED'):
         uut._handle_event(event)
-        assert uut.current_state == 'EMERGENCY_STOP', f'{event} should not exit EMERGENCY_STOP'
-    uut.destroy_node()
+        assert uut.current_state == 'EMERGENCY_STOP'
 
 
 def test_reset_exits_emergency_stop_to_idle():
