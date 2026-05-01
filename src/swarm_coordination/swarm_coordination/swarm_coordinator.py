@@ -56,6 +56,7 @@ class SwarmCoordinator(Node):
                 ('resolution', 1.0),
                 ('coverage_radius', 0.7),  # sensor footprint radius (m) for cell marking
                 ('sensor_fov_deg', 60.0),
+                ('flight_altitude', 0.8),
             ]
         )
 
@@ -69,6 +70,7 @@ class SwarmCoordinator(Node):
 
         # compute coverage radius from sensor fov
         fov = math.radians(self.get_parameter('sensor_fov_deg').value)
+        altitude = self.get_parameter('flight_altitude').value
 
         self.coverage_radius = altitude * math.tan(fov / 2)
 
