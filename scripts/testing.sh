@@ -40,9 +40,6 @@ for WORLD in "${WORLDS[@]}"; do
     DIFF="unknown"
   fi
 
-  # ----- snapshot results BEFORE -----
-  BEFORE_FILES=$(ls "$RESULTS_DIR" 2>/dev/null || true)
-
   # ----- start simulator -----
   echo "Starting simulator..."
   ./run_sim.sh "$WORLD" &
@@ -54,7 +51,7 @@ for WORLD in "${WORLDS[@]}"; do
     sleep 1
   done
 
-  # unpause
+  # unpause simulator
   echo "Unpausing simulator..."
   ros2 service call /world/default/control gz_msgs/srv/WorldControl "{pause: false}" > /dev/null
 
@@ -66,27 +63,28 @@ for WORLD in "${WORLDS[@]}"; do
 
   echo "Mission complete."
 
-  # ----- snapshot AFTER -----
-  AFTER_FILES=$(ls "$RESULTS_DIR" 2>/dev/null || true)
+  # give time for results file to be written
+  sleep 2
 
-  NEW_FILES=$(comm -13 <(echo "$BEFORE_FILES" | sort) <(echo "$AFTER_FILES" | sort))
-
+  # ----- rename latest result file -----
   TS=$(date +%H%M%S)
 
-  # ----- rename new result files -----
-  for FILE in $NEW_FILES; do
-    FULL_PATH="$RESULTS_DIR/$FILE"
+  LATEST_FILE=$(ls -t "$RESULTS_DIR" | head -n 1)
 
-    if [ -f "$FULL_PATH" ]; then
-      BASE="${FILE%.*}"
-      EXT="${FILE##*.}"
+  if [ -n "$LATEST_FILE" ]; then
+    FULL_PATH="$RESULTS_DIR/$LATEST_FILE"
 
-      NEW_NAME="${BASE}_${DIFF}_run${RUN_ID}_${TS}.${EXT}"
-      mv "$FULL_PATH" "$RESULTS_DIR/$NEW_NAME"
+    BASE="${LATEST_FILE%.*}"
+    EXT="${LATEST_FILE##*.}"
 
-      echo "Saved: $NEW_NAME"
-    fi
-  done
+    NEW_NAME="${BASE}_${DIFF}_run${RUN_ID}_${TS}.${EXT}"
+
+    mv "$FULL_PATH" "$RESULTS_DIR/$NEW_NAME"
+
+    echo "Saved: $NEW_NAME"
+  else
+    echo "WARNING: No result files found"
+  fi
 
   # ----- kill simulator -----
   echo "Stopping simulator..."
