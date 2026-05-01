@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <sdf version="1.7">
-  <world name="quadcopter_easy_world3">
+  <world name="quadcopter_world">
 
     <!-- Physics -->
     <physics type="ode"/>
@@ -241,6 +241,7 @@
     
     <!-- Block 1 -->
     <model name="box_1">
+      <static>true</static>
       <pose>-8 -8 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -252,12 +253,14 @@
           <geometry>
             <box><size>1 1 1</size></box>
           </geometry>
+          <material><ambient>1 0 0 1</ambient></material>
         </visual>
       </link>
     </model>
 
     <!-- Block 2 -->
     <model name="box_2">
+      <static>true</static>
       <pose>-8 8 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -269,12 +272,14 @@
           <geometry>
             <box><size>1 1 1</size></box>
           </geometry>
+          <material><ambient>1 0 0 1</ambient></material>
         </visual>
       </link>
     </model>
 
     <!-- Block 3 -->
     <model name="box_3">
+      <static>true</static>
       <pose>8 -8 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -286,12 +291,14 @@
           <geometry>
             <box><size>1 1 1</size></box>
           </geometry>
+          <material><ambient>1 0 0 1</ambient></material>
         </visual>
       </link>
     </model>
 
     <!-- Block 4 -->
     <model name="box_4">
+      <static>true</static>
       <pose>8 8 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -303,6 +310,7 @@
           <geometry>
             <box><size>1 1 1</size></box>
           </geometry>
+          <material><ambient>1 0 0 1</ambient></material>
         </visual>
       </link>
     </model>
