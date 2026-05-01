@@ -40,8 +40,14 @@ for WORLD in "${WORLDS[@]}"; do
   fi
 
   # ----- start simulator -----
-  echo "Starting simulator..."
-  ./run_sim.sh "$WORLD" &
+  echo "Starting simulator in new terminal..."
+
+  gnome-terminal -- bash -c "
+    cd '$SCRIPT_DIR';
+    ./run_sim.sh '$WORLD';
+    exec bash
+  "
+
   sleep 3
 
   # wait for gazebo service
