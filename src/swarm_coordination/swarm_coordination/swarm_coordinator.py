@@ -89,12 +89,13 @@ class SwarmCoordinator(Node):
         self.coverage_waypoints_total = 0
         self.coverage_waypoints_visited = 0
         self.coverage_map = {}          # uav_id → coverage_ratio
+        self.done_refining = set()      # peers that left REFINING (helpers)
         self.run_id = int(time.time())
         self.last_coverage = 0.0
         self.stall_count = 0
         self.refine_pass_count = 0          # hard cap on refinement passes
         self.refine_pass_start_coverage = 0.0  # baseline for THIS pass only
-        self.MAX_REFINE_PASSES = 4          # hard ceiling — demo-friendly
+        self.MAX_REFINE_PASSES = 4          # hard ceiling
         self.MIN_PASS_IMPROVEMENT = 0.015   # 1.5% per pass or it counts as a stall
         self._completion_timer = None  # active during the post-refine sync hover
         self.home_pose = None
@@ -190,6 +191,12 @@ class SwarmCoordinator(Node):
             self._send_waypoints([], mode="STOP")
 
     def _on_fsm_state_change(self, msg):
+        # Track peers that finished/bailed refining — they're helper-eligible.
+        if msg.previous_state == 'REFINING' and msg.state in ('ASSISTING', 'RETURNING'):
+            self.done_refining.add(msg.uav_id)
+        if msg.state == 'IDLE':
+            self.done_refining.discard(msg.uav_id)
+
         if msg.uav_id != self.uav_id:
             return
 
@@ -340,7 +347,8 @@ class SwarmCoordinator(Node):
         self._send_waypoints(poses, mode="REFINE")
 
     def _publish_assistive_waypoints(self, pair_threshold):
-        pairings = assign_helpers(self.coverage_map, pair_threshold)
+        done = self.done_refining | {self.uav_id}
+        pairings = assign_helpers(self.coverage_map, pair_threshold, done)
         target_id = pairings.get(self.uav_id)
         if target_id is None:
             # FSM put us in ASSISTING but no target survived re-pairing — stand down
@@ -353,14 +361,19 @@ class SwarmCoordinator(Node):
         tx_start = xmin + target_index * slice_width
         tx_end = xmin + (target_index + 1) * slice_width
 
-        # offset rows by half spacing so they fill gaps between peer's lawnmower
-        spacing = (self.area[3] - self.area[2]) / (self.rows * 2 - 1)
+        # Perpendicular sweep: scan columns top-to-bottom instead of rows
+        ymin, ymax = self.area[2], self.area[3]
+        col_spacing = self.coverage_radius * 1.2  # tighter than search
+        cols = max(2, int((tx_end - tx_start) / col_spacing))
         poses = _lawnmower(
+            ymin, ymax,
             tx_start, tx_end,
-            self.area[2] + spacing / 2,
-            self.area[3] - spacing / 2,
-            self.rows * 2 - 1,
+            cols,
         )
+
+        for p in poses:
+            p.position.x, p.position.y = p.position.y, p.position.x
+
         self._send_waypoints(poses, mode="ASSIST", x_start=tx_start, x_end=tx_end)
 
     def _publish_return_home_waypoints(self):
@@ -424,12 +437,37 @@ class SwarmCoordinator(Node):
 
         # Early stop for assisting
         if self.current_mode == 'ASSISTING':
-            pairings = assign_helpers(self.coverage_map, self.threshold)
+            done = self.done_refining | {self.uav_id}
+            pairings = assign_helpers(self.coverage_map, self.threshold, done)
             target_id = pairings.get(self.uav_id)
 
             if target_id is None or self.coverage_map.get(target_id, 0.0) >= self.threshold:
                 self._publish_event('ASSIST_COMPLETE')
                 return
+
+        # Early stop for refining: bail as soon as we cross threshold
+        if self.current_mode == 'REFINING':
+            if coverage + 1e-6 >= self.threshold:
+                self._publish_event('REFINEMENT_COMPLETE')
+                return
+
+            # Also bail mid-pass if the pass is clearly going nowhere
+            half_done = self.coverage_waypoints_visited >= max(
+                4, self.coverage_waypoints_total // 2)
+            if half_done:
+                mid_progress = coverage - self.refine_pass_start_coverage
+                if mid_progress < self.MIN_PASS_IMPROVEMENT / 2:
+                    self.stall_count += 1
+                    self.refine_pass_count += 1
+                    self.last_coverage = coverage
+                    if (self.stall_count >= 2
+                            or self.refine_pass_count >= self.MAX_REFINE_PASSES):
+                        self._publish_event('REFINEMENT_COMPLETE')
+                    else:
+                        self.refine_pass_start_coverage = coverage
+                        self.coverage_waypoints_visited = 0
+                        self._publish_refinement_waypoints()
+                    return
 
         if self.coverage_waypoints_visited < self.coverage_waypoints_total:
             return

@@ -16,23 +16,26 @@ def _uav_idx(uav_id):
     return int(uav_id[1:])
 
 
-def assign_helpers(coverage_map, threshold):
+def assign_helpers(coverage_map, threshold, done_refining=None):
     # Pair each unfinished region with at most one helper UAV.
     if not coverage_map:
         return {}
+    done_refining = done_refining or set()
 
     targets = sorted(
-        (uid for uid, r in coverage_map.items() if r < threshold),
-        key=_uav_idx,
+        ((uid, r) for uid, r in coverage_map.items()
+         if r < threshold and uid not in done_refining),
+        key=lambda item: (item[1], _uav_idx(item[0])),
     )
     helpers = sorted(
-        (uid for uid, r in coverage_map.items() if r >= threshold),
+        (uid for uid, r in coverage_map.items()
+         if r >= threshold or uid in done_refining),
         key=_uav_idx,
     )
 
     pairings = {}
     used = set()
-    for tgt in targets:
+    for tgt, _ratio in targets:
         tgt_idx = _uav_idx(tgt)
         best, best_dist = None, None
         for h in helpers:
@@ -57,7 +60,7 @@ class UAVStateManager(Node):
             namespace='',
             parameters=[
                 ('uav_id', 'x1'),
-                ('threshold', 0.95),
+                ('threshold', 0.90),
                 ('num_uavs', 3),
             ]
         )
@@ -72,6 +75,7 @@ class UAVStateManager(Node):
         self.recovery_attempts = 0
         self.max_recovery_attempts = 3
         self.coverage_map = {}
+        self.done_refining = set()  # UAVs that finished/bailed refining
 
         # ===== Publishers =====
         self._state_pub = self.create_publisher(UAVState, '/uav/state', 10)
@@ -84,6 +88,7 @@ class UAVStateManager(Node):
         self.create_subscription(Empty, '/mission/complete', self._on_mission_complete, 10) # natural end
         self.create_subscription(FSMEvent, f'/{self.uav_id}/fsm/event', self._on_fsm_event, 10)
         self.create_subscription(MissionCoverage, '/mission/coverage', self._on_coverage_update, 10)
+        self.create_subscription(UAVState, '/uav/state', self._on_peer_state, 10)
 
         # Publish initial state so other nodes see IDLE on startup
         self._publish_state()
@@ -112,6 +117,14 @@ class UAVStateManager(Node):
     def _on_coverage_update(self, msg):
         for uid, ratio in zip(msg.uav_ids, msg.coverage_ratios):
             self.coverage_map[uid] = ratio
+
+    def _on_peer_state(self, msg):
+        # A UAV has finished refining if it ever leaves REFINING for ASSISTING
+        if msg.previous_state == 'REFINING' and msg.state in ('ASSISTING', 'RETURNING'):
+            self.done_refining.add(msg.uav_id)
+        # New mission: clear the set.
+        if msg.state == 'IDLE' and msg.previous_state in ('RETURNING', ''):
+            self.done_refining.discard(msg.uav_id)
 
     # ===== Core FSM =====
 
@@ -173,7 +186,8 @@ class UAVStateManager(Node):
                 if len(self.coverage_map) < self.num_uavs:
                     return  # not enough info yet
 
-                pairings = assign_helpers(self.coverage_map, self.threshold)
+                done = self.done_refining | {self.uav_id}
+                pairings = assign_helpers(self.coverage_map, self.threshold, done)
                 if self.uav_id in pairings:
                     self._transition('ASSISTING')
                     self._publish_command('START_ASSIST')
@@ -198,7 +212,8 @@ class UAVStateManager(Node):
                 if len(self.coverage_map) < self.num_uavs:
                     return  # not enough info yet
 
-                pairings = assign_helpers(self.coverage_map, self.threshold)
+                done = self.done_refining | {self.uav_id}
+                pairings = assign_helpers(self.coverage_map, self.threshold, done)
                 if self.uav_id in pairings:
                     self._transition('ASSISTING')
                     self._publish_command('START_ASSIST')
