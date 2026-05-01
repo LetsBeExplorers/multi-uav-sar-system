@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <sdf version="1.7">
-  <world name="quadcopter_medium_world2">
+  <world name="quadcopter_world">
 
     <!-- Physics -->
     <physics type="ode"/>
@@ -253,6 +253,7 @@
           <geometry>
             <box><size>1 1 1</size></box>
           </geometry>
+          <material><ambient>1 0 0 1</ambient></material>
         </visual>
       </link>
     </model>
@@ -270,6 +271,7 @@
           <geometry>
             <box><size>1 1 1</size></box>
           </geometry>
+          <material><ambient>1 0 0 1</ambient></material>
         </visual>
       </link>
     </model>
@@ -287,6 +289,7 @@
           <geometry>
             <box><size>1 1 1</size></box>
           </geometry>
+          <material><ambient>1 0 0 1</ambient></material>
         </visual>
       </link>
     </model>
@@ -304,6 +307,7 @@
           <geometry>
             <box><size>1 1 1</size></box>
           </geometry>
+          <material><ambient>1 0 0 1</ambient></material>
         </visual>
       </link>
     </model>
@@ -322,6 +326,7 @@
           <geometry>
             <box><size>1 1 1</size></box>
           </geometry>
+          <material><ambient>1 0 0 1</ambient></material>
         </visual>
       </link>
     </model>
@@ -339,6 +344,7 @@
           <geometry>
             <box><size>1 1 1</size></box>
           </geometry>
+          <material><ambient>1 0 0 1</ambient></material>
         </visual>
       </link>
     </model>
@@ -373,6 +379,7 @@
           <geometry>
             <box><size>1 1 1</size></box>
           </geometry>
+          <material><ambient>1 0 0 1</ambient></material>
         </visual>
       </link>
     </model>
