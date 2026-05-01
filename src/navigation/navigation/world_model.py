@@ -5,7 +5,7 @@ from geometry_msgs.msg import Pose
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from sar_msgs.msg import FSMEvent
+from sar_msgs.msg import FSMEvent, Alert
 from sar_msgs.srv import GetOccupancyGrid
 from sensor_msgs.msg import LaserScan
 
@@ -27,7 +27,7 @@ class WorldModelNode(Node):
                 ('origin_x', -10.0),
                 ('origin_y', -10.0),
                 ('static_obstacles', []),
-                ('collision_threshold', 0.27),
+                ('collision_threshold', 0.25),
             ]
         )
 
@@ -67,21 +67,25 @@ class WorldModelNode(Node):
         )
 
         # ===== Publishers =====
+        self._alert_pub = self.create_publisher(Alert, '/alerts', 10)
         self._event_pub = self.create_publisher(FSMEvent, f'/{self.uav_id}/fsm/event', 10)
         self._grid_pub = self.create_publisher(OccupancyGrid, f'/{self.uav_id}/world_model/grid', qos_transient)
+
+        qos_best_effort = QoSProfile(depth=10)
+        qos_best_effort.reliability = ReliabilityPolicy.BEST_EFFORT
 
         # ===== Subscribers =====
         self.create_subscription(
             Odometry,
             f'/{self.uav_id}/state/odom',
             self._on_own_pose_update,
-            10
+            qos_best_effort
         )
         self.create_subscription(
             LaserScan,
             f'/{self.uav_id}/scan',
             self._on_laser_scan,
-            10
+            qos_best_effort
         )
 
         def make_callback(uid):
@@ -191,7 +195,7 @@ class WorldModelNode(Node):
             return
 
         # collision detection
-        valid = [r for r in msg.ranges if msg.range_min < r < msg.range_max]
+        valid = [r for r in msg.ranges if r > 0.0 and r < msg.range_max]
 
         if valid:
             min_dist = min(valid)
@@ -207,6 +211,7 @@ class WorldModelNode(Node):
                     event.uav_id = self.uav_id
                     event.timestamp = now.nanoseconds / 1e9
                     event.event = 'HARD_COLLISION'
+                    self._alert("HARD_COLLISION", f"Impact at {min_dist:.2f}m")
 
                     self._event_pub.publish(event)
 
@@ -340,6 +345,14 @@ class WorldModelNode(Node):
         response.origin_y = float(self.origin_y)
 
         return response
+
+    def _alert(self, typ, message, level="CRITICAL"):
+        msg = Alert()
+        msg.uav_id = self.uav_id
+        msg.type = typ
+        msg.level = level
+        msg.message = message
+        self._alert_pub.publish(msg)
 
 
 def main(args=None):
