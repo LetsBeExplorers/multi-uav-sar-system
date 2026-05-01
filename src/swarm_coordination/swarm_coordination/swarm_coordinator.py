@@ -92,6 +92,10 @@ class SwarmCoordinator(Node):
         self.run_id = int(time.time())
         self.last_coverage = 0.0
         self.stall_count = 0
+        self.refine_pass_count = 0          # hard cap on refinement passes
+        self.refine_pass_start_coverage = 0.0  # baseline for THIS pass only
+        self.MAX_REFINE_PASSES = 4          # hard ceiling — demo-friendly
+        self.MIN_PASS_IMPROVEMENT = 0.015   # 1.5% per pass or it counts as a stall
         self._completion_timer = None  # active during the post-refine sync hover
         self.home_pose = None
         self._all_done_sent = False
@@ -162,6 +166,8 @@ class SwarmCoordinator(Node):
                 if self.total_cells else 0.0
             )
             self.stall_count = 0
+            self.refine_pass_count = 0
+            self.refine_pass_start_coverage = self.last_coverage
             self._publish_refinement_waypoints()
 
         elif msg.event == 'START_ASSIST':
@@ -300,15 +306,16 @@ class SwarmCoordinator(Node):
             x = self.x_start + (gx + 0.5) * self.resolution
             y = self.area[2] + (gy + 0.5) * self.resolution
 
-            # Skip cells near obstacles (already covered neighbors)
+            # Drop only cells with zero covered neighbors (truly stranded).
             neighbor_hits = 0
             for dx in [-1, 0, 1]:
                 for dy in [-1, 0, 1]:
+                    if dx == 0 and dy == 0:
+                        continue
                     if (gx + dx, gy + dy) in self.visited_cells:
                         neighbor_hits += 1
 
-            # If it's completely isolated, skip it (likely unreachable)
-            if neighbor_hits < 2:
+            if neighbor_hits < 1:
                 continue
 
             p = Pose()
@@ -318,8 +325,9 @@ class SwarmCoordinator(Node):
             p.orientation.w = 1.0
             poses.append(p)
 
-        # higher = fewer waypoints
-        poses = poses[::3]
+        # Subsample by ~one sensor footprint.
+        stride = max(1, int(self.coverage_radius / self.resolution))
+        poses = poses[::stride]
 
         # All candidates filtered out (isolated / unreachable)
         if not poses:
@@ -432,22 +440,32 @@ class SwarmCoordinator(Node):
                 self._region_complete_sent = True
 
         elif self.current_mode == 'REFINING':
-            improvement = coverage - self.last_coverage
+            # Compare end-of-pass to start-of-pass to ignore odom drift.
+            pass_improvement = coverage - self.refine_pass_start_coverage
+            self.refine_pass_count += 1
 
-            if improvement < 0.01:  # less than 1% improvement
+            if pass_improvement < self.MIN_PASS_IMPROVEMENT:
                 self.stall_count += 1
             else:
                 self.stall_count = 0
 
             self.last_coverage = coverage
 
-            # only refine again if needed
-            if coverage + 1e-6 < self.threshold and self.stall_count < 2:
-                self.coverage_waypoints_visited = 0
-                self._publish_refinement_waypoints()
+            # Bail if threshold hit, two stalls in a row, or pass cap reached.
+            done = (
+                coverage + 1e-6 >= self.threshold
+                or self.stall_count >= 2
+                or self.refine_pass_count >= self.MAX_REFINE_PASSES
+            )
+
+            if done:
+                self._publish_event('REFINEMENT_COMPLETE')
                 return
             else:
-                self._publish_event('REFINEMENT_COMPLETE')
+                # Snapshot baseline before odom drift can move it.
+                self.refine_pass_start_coverage = coverage
+                self.coverage_waypoints_visited = 0
+                self._publish_refinement_waypoints()
                 return
                 
         elif self.current_mode == 'ASSISTING':
