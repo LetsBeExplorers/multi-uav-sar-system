@@ -196,7 +196,7 @@ class WorldModelNode(Node):
         if valid:
             min_dist = min(valid)
 
-            if min_dist < collision_threshold:
+            if min_dist < self.collision_threshold:
                 now = self.get_clock().now()
                 dt = (now - self.last_collision_time).nanoseconds / 1e9
 
