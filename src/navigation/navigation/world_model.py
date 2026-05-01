@@ -196,8 +196,7 @@ class WorldModelNode(Node):
         if valid:
             min_dist = min(valid)
 
-            # VERY CLOSE → likely physical contact
-            if min_dist < 0.2:   # <-- tune this if needed
+            if min_dist < collision_threshold:
                 now = self.get_clock().now()
                 dt = (now - self.last_collision_time).nanoseconds / 1e9
 
