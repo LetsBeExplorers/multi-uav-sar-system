@@ -241,6 +241,7 @@
     
     <!-- Vertical wall with gap -->
     <model name="box_1">
+      <static>true</static>
       <pose>0 -8 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -257,6 +258,7 @@
     </model>
 
     <model name="box_2">
+      <static>true</static>
       <pose>0 -5 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -273,6 +275,7 @@
     </model>
 
     <model name="box_3">
+      <static>true</static>
       <pose>0 -2 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -289,6 +292,7 @@
     </model>
 
     <model name="box_4">
+      <static>true</static>
       <pose>0 2 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -305,6 +309,7 @@
     </model>
 
     <model name="box_5">
+      <static>true</static>
       <pose>0 5 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -321,6 +326,7 @@
     </model>
 
     <model name="box_6">
+      <static>true</static>
       <pose>0 8 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">

@@ -241,6 +241,7 @@
 
     <!-- Left vertical wall -->
     <model name="box_1">
+      <static>true</static>
       <pose>-4 -8 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -257,6 +258,7 @@
     </model>
 
     <model name="box_2">
+      <static>true</static>
       <pose>-4 -5 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -273,6 +275,7 @@
     </model>
 
     <model name="box_3">
+      <static>true</static>
       <pose>-4 -2 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -289,6 +292,7 @@
     </model>
 
     <model name="box_4">
+      <static>true</static>
       <pose>-4 1 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -305,6 +309,7 @@
     </model>
 
     <model name="box_5">
+      <static>true</static>
       <pose>-4 4 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -321,6 +326,7 @@
     </model>
 
     <model name="box_6">
+      <static>true</static>
       <pose>-4 7 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -338,6 +344,7 @@
 
     <!-- Right vertical wall -->
     <model name="box_7">
+      <static>true</static>
       <pose>4 -7 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -354,6 +361,7 @@
     </model>
 
     <model name="box_8">
+      <static>true</static>
       <pose>4 -4 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -370,6 +378,7 @@
     </model>
 
     <model name="box_9">
+      <static>true</static>
       <pose>4 -1 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -386,6 +395,7 @@
     </model>
 
     <model name="box_10">
+      <static>true</static>
       <pose>4 2 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -402,6 +412,7 @@
     </model>
 
     <model name="box_11">
+      <static>true</static>
       <pose>4 5 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -418,6 +429,7 @@
     </model>
 
     <model name="box_12">
+      <static>true</static>
       <pose>4 8 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">

@@ -241,6 +241,7 @@
 
     <!-- Left vertical -->
     <model name="box_1">
+      <static>true</static>
       <pose>-3 -8 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -257,6 +258,7 @@
     </model>
 
     <model name="box_2">
+      <static>true</static>
       <pose>-3 -5 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -273,6 +275,7 @@
     </model>
 
     <model name="box_3">
+      <static>true</static>
       <pose>-3 -2 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -289,6 +292,7 @@
     </model>
 
     <model name="box_4">
+      <static>true</static>
       <pose>-3 2 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -306,6 +310,7 @@
 
     <!-- Right vertical (offset) -->
     <model name="box_5">
+      <static>true</static>
       <pose>3 -2 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -322,6 +327,7 @@
     </model>
 
     <model name="box_6">
+      <static>true</static>
       <pose>3 2 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -338,6 +344,7 @@
     </model>
 
     <model name="box_7">
+      <static>true</static>
       <pose>3 5 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
@@ -354,6 +361,7 @@
     </model>
 
     <model name="box_8">
+      <static>true</static>
       <pose>3 8 0.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
