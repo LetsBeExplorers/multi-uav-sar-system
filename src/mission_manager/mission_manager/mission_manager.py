@@ -91,8 +91,6 @@ class MissionManager(Node):
         self._check_mission_complete()
 
     def _on_coverage_msg(self, msg):
-        if self.mission_state == 'IDLE':
-            return
         prev = self.uav_coverage.get(msg.uav_id, None)
 
         self._update_coverage(
