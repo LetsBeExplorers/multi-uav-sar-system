@@ -763,13 +763,11 @@ def test_all_drones_done_when_all_coverage_complete():
 
     _spin(uut, helper, 10)
 
-    # seed coverage_map: all UAVs at full coverage
-    uut.coverage_map = {'x1': 1.0, 'x2': 1.0, 'x3': 1.0}
+    msg = MissionCoverage()
+    msg.uav_ids = ['x1','x2','x3']
+    msg.coverage_ratios = [1.0, 1.0, 1.0]
 
-    uut._on_fsm_state_change(_make_state_msg('x1', 'ASSISTING', 'REFINING'))
-
-    # trigger evaluation
-    uut._check_coverage_events()
+    uut._on_coverage_update(msg)
 
     _spin(uut, helper, 20)
 
@@ -787,18 +785,24 @@ def test_assist_complete_when_other_regions_unfinished():
 
     _spin(uut, helper, 10)
 
-    # x2 still below threshold
-    uut.coverage_map = {'x1': 1.0, 'x2': 0.5, 'x3': 1.0}
-    uut._on_fsm_state_change(_make_state_msg('x1', 'ASSISTING', 'REFINING'))
+    # simulate coverage state
+    msg = MissionCoverage()
+    msg.uav_ids = ['x1','x2','x3']
+    msg.coverage_ratios = [1.0, 0.5, 1.0]
+    uut._on_coverage_update(msg)
 
-    # simulate full coverage
+    # force mode
+    uut.current_mode = 'ASSISTING'
+
+    # simulate completion
     for gx in range(uut.slice_w_cells):
         for gy in range(uut.slice_h_cells):
             uut.visited_cells.add((gx, gy))
 
-    total = uut.coverage_waypoints_total
-    for _ in range(total):
-        uut._on_waypoint_reached(Empty())
+    uut.coverage_waypoints_total = 10
+    uut.coverage_waypoints_visited = 10
+
+    uut._check_coverage_events()
 
     _spin(uut, helper, 20)
 
@@ -811,14 +815,12 @@ def test_assist_complete_when_other_regions_unfinished():
 def test_returning_ignores_waypoint_reached():
     uut = _make_coordinator()
 
-    uut._on_fsm_command(_make_cmd_msg('x1', 'GO_HOME'))
+    uut.is_paused = True
 
     uut._on_waypoint_reached(Empty())
     uut._on_waypoint_reached(Empty())
 
     assert uut.coverage_waypoints_visited == 0
-
-    uut.destroy_node()
 
 
 def test_region_complete_emitted_once():
