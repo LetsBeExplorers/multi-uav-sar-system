@@ -6,6 +6,7 @@ from geometry_msgs.msg import Twist
 import pytest
 import rclpy
 from sar_msgs.msg import DriverHealth, FSMEvent
+from sensor_msgs.msg import LaserScan
 from uav_platform.platform_interface import PlatformInterface
 
 
@@ -136,6 +137,29 @@ def test_healthy_health_no_events():
     _spin(uut, helper, 20)
 
     assert len(events) == 0
+
+    uut.destroy_node()
+    helper.destroy_node()
+
+
+def test_collision_risk_event_published():
+    uut = PlatformInterface()
+    helper = rclpy.create_node('test_collision_helper')
+
+    events = []
+    helper.create_subscription(FSMEvent, '/x1/fsm/event', events.append, 10)
+
+    scan_pub = helper.create_publisher(LaserScan, '/x1/scan', 10)
+
+    _spin(uut, helper, 10)
+
+    scan = LaserScan()
+    scan.ranges = [0.3]  # below threshold → collision risk
+    scan_pub.publish(scan)
+
+    _spin(uut, helper, 20)
+
+    assert any(e.event == 'COLLISION_RISK' for e in events)
 
     uut.destroy_node()
     helper.destroy_node()

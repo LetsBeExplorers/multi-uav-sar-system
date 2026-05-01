@@ -150,30 +150,6 @@ def test_dynamic_obstacle_clears_to_unknown():
     helper.destroy_node()
 
 
-def test_collision_risk_event_published():
-    """COLLISION_RISK FSM event is published when another UAV comes within threshold."""
-    uut = WorldModelNode()
-    helper = rclpy.create_node('test_collision_helper')
-    own_pub = helper.create_publisher(Odometry, '/x1/state/odom', 10)
-    other_pub = helper.create_publisher(Odometry, '/x2/state/odom', 10)
-    events = []
-    helper.create_subscription(FSMEvent, '/x1/fsm/event', events.append, 10)
-
-    _spin(uut, helper, 10)
-
-    own_pub.publish(_make_odom(0.0, 0.0))
-    _spin(uut, helper, 10)
-
-    # place x2 at (0.3, 0) — within collision_threshold of 0.5m
-    other_pub.publish(_make_odom(0.3, 0.0))
-    _spin(uut, helper, 20)
-
-    assert any(e.event == 'COLLISION_RISK' for e in events)
-
-    uut.destroy_node()
-    helper.destroy_node()
-
-
 def test_no_collision_event_when_far():
     """No COLLISION_RISK event when UAVs are well separated."""
     uut = WorldModelNode()
