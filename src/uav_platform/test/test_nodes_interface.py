@@ -154,7 +154,7 @@ def test_collision_risk_event_published():
     _spin(uut, helper, 10)
 
     scan = LaserScan()
-    scan.ranges = [0.3]  # below threshold → collision risk
+    scan.ranges = [0.2]  # below threshold → collision risk
     scan_pub.publish(scan)
 
     _spin(uut, helper, 20)
