@@ -56,7 +56,7 @@ class SwarmCoordinator(Node):
                 ('resolution', 1.0),
                 ('coverage_radius', 0.7),  # sensor footprint radius (m) for cell marking
                 ('sensor_fov_deg', 60.0),
-                ('flight_altitude', 1.0),
+                ('flight_altitude', 0.8),
             ]
         )
 
