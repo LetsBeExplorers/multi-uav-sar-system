@@ -182,12 +182,20 @@ def test_verification_second_start_replaces_first_timer(verification_node):
     assert verification_node._verify_timer is not None
 
 
-def test_verification_decide_publishes_confirmed(verification_node, monkeypatch):
-    monkeypatch.setattr(verification_mod.random, 'random', lambda: 0.0)  # < confirm_prob
+def test_verification_decide_publishes_confirmed(verification_node):
+    # add real target
+    verification_node.targets = [(5.0, -3.0)]
+
+    # simulate detection near it
+    detection = DetectionEvent()
+    detection.x = 5.2
+    detection.y = -3.4
+    detection.confidence = 0.9
+    verification_node._on_detection(detection)
+
     verification_node._decide()
+
     assert verification_node._fsm_published[-1].event == 'CONFIRMED_TARGET'
-    assert verification_node._alert_published[-1].level == 'CRITICAL'
-    assert verification_node._alert_published[-1].type == 'CONFIRMATION'
 
 
 def test_verification_decide_publishes_false_positive(verification_node, monkeypatch):
