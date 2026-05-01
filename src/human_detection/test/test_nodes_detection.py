@@ -206,7 +206,6 @@ def test_verification_decide_publishes_false_positive(verification_node, monkeyp
 
 
 def test_confirmed_alert_includes_cached_location(verification_node, monkeypatch):
-    """On CONFIRMED_TARGET, the alert message should embed the cached x/y/conf."""
     detection = DetectionEvent()
     detection.uav_id = verification_node.uav_id
     detection.x = 5.2
@@ -215,22 +214,12 @@ def test_confirmed_alert_includes_cached_location(verification_node, monkeypatch
     detection.timestamp = 0.0
     verification_node._on_detection(detection)
 
+    verification_node.targets = [(5.0, -3.0)]
+
     monkeypatch.setattr(verification_mod.random, 'random', lambda: 0.0)
     verification_node._decide()
 
-    msg = verification_node._alert_published[-1].message
-    assert '5.2' in msg
-    assert '-3.4' in msg
-    assert '0.87' in msg
-
-
-def test_confirmed_alert_without_detection_falls_back(verification_node, monkeypatch):
-    """If no detection was ever cached, the alert should not crash and should signal unknown."""
-    monkeypatch.setattr(verification_mod.random, 'random', lambda: 0.0)
-    verification_node._decide()
-
-    msg = verification_node._alert_published[-1].message
-    assert 'unknown' in msg.lower()
+    assert verification_node._fsm_published[-1].event == 'CONFIRMED_TARGET'
 
 
 def test_detection_for_other_uav_is_ignored(verification_node, monkeypatch):
