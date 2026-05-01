@@ -48,7 +48,7 @@ class PathExecutorNode(Node):
         self.is_returning = False
         self.path_cells_total = 0
         self.path_cells_traversed = 0
-        self._target_z = 1.0   # cruise altitude matching waypoint z
+        self._target_z = 0.75  # cruise altitude matching waypoint z
         self.is_paused = False  # set when FSM enters VERIFYING/TARGET_LOCK
 
         qos_transient = QoSProfile(
